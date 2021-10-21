@@ -132,7 +132,7 @@ class STARSController:
                            'IX': 0,
                            'IY': 0,
                            'IZ': 0,
-                           'ISTOP': 0}
+                           'ISTART': 0} # CHECK THIS TOO
 
         self.output('status', 'Configuring Parameters')
         self.configure_parameters(pre_zams_params)
@@ -152,7 +152,7 @@ class STARSController:
                            'IX': 1,
                            'IY': 1,
                            'IZ': 1,
-                           'ISTART': 1}
+                           'ISTART': 1} # CHECK THIS
 
         self.output('status', 'Configuring Parameters')
         self.configure_parameters(main_evo_params)
