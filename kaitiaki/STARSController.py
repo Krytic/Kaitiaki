@@ -114,6 +114,7 @@ class STARSController:
         return self.terminal_command(f'./run_bs')
 
     def modout_to_modin(self, modout_location="modout", modin_location="modin"):
+        # this broke - what if data don't exist?
         with kaitiaki.datafile.DataFileParser('data') as dfile:
             nmesh = dfile.get('NM2')
 
@@ -148,7 +149,11 @@ class STARSController:
         self.output('status', 'Configuring Parameters')
         self.configure_parameters(pre_zams_params)
         self.output('status', 'Beginning ZAMS evolution')
-        self.run()
+        output, error, status = self.run()
+
+        if self._verbose_output:
+            self.output("status", output)
+            self.output("error", error)
 
         out = self._output_dir
         self.output('status', 'Moving output files')
@@ -169,7 +174,13 @@ class STARSController:
         self.configure_parameters(main_evo_params)
 
         self.output('status', 'Beginning post-ZAMS evolution')
-        self.run()
+
+        output, error, status = self.run()
+
+        if self._verbose_output:
+            self.output("status", output)
+            self.output("error", error)
+
         self.output('status', 'Moving output files')
 
         self.terminal_command(f'mv plot {out}/plot.model')
