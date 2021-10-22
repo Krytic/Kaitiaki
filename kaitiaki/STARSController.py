@@ -18,6 +18,7 @@ class STARSController:
         """
         self._verbose_output = verbose_output
         self._output_dir = "."
+        self._params = dict()
 
     def output(self, type, message):
         """Outputs a message to stdout, if verbose_output is on. Does
@@ -46,7 +47,8 @@ class STARSController:
             params {dict} -- A dictionary containing key: value pairs
             of what to write to the datafile.
         """
-        self._params = params
+        for k, v in params.items():
+            self._params[k.lower()] = v
 
     def set_output_directory(self, directory):
         """Sets up the output directory.
@@ -114,13 +116,26 @@ class STARSController:
         return self.terminal_command(f'./run_bs')
 
     def modout_to_modin(self, modout_location="modout", modin_location="modin"):
-        # this broke - what if data don't exist?
-        with kaitiaki.datafile.DataFileParser('data') as dfile:
-            nmesh = dfile.get('NM2')
+        # order of preference:
+        # - existing datafile
+        # - declared new parameters
+        # - the STARS default (199)
+        if path.exists('data'):
+            with kaitiaki.datafile.DataFileParser('data') as dfile:
+                nmesh = dfile.get('NM2')
+        elif 'nm2' in self._params.keys():
+            nmesh = self._params['nm2']
+        else:
+            nmesh = 199 # assume default
 
         lines = nmesh * 2 + 1
 
-        output, _, _ = self.terminal_command(f'tail -{lines} {modout_location}')
+        with open(modout_location, 'r') as f:
+            output = f.readlines()
+
+        N = len(output)
+
+        output = output[N-lines:]
 
         with open(modin_location, 'w') as f:
             f.write(output)
