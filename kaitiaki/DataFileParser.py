@@ -316,7 +316,7 @@ class DataFileParser:
                 if num_dp_of_scientific_notation > 0:
                     value = f'%.{num_dp_of_scientific_notation}E' % Decimal(value)
                 if num_dp > 0:
-                    value = f'%.{num_dp}f' & Decimal(value)
+                    value = f'%.{num_dp}f' % Decimal(value)
 
                 if idx[2] == None:
                     endpoint = len(self._contents[idx[0]])
