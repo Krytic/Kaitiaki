@@ -138,7 +138,7 @@ class STARSController:
         output = output[N-lines:]
 
         with open(modin_location, 'w') as f:
-            f.write(output)
+            f.writelines(output)
 
     def run_default_evolution(self, zams_mass):
         """Performs one run from pre-ZAMS until the end of evolution.
