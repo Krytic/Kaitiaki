@@ -113,6 +113,17 @@ class STARSController:
 
         return self.terminal_command(f'./run_bs')
 
+    def modout_to_modin(self, modout_location="modout", modin_location="modin"):
+        with kaitiaki.datafile.DataFileParser('data') as dfile:
+            nmesh = dfile.get('NM2')
+
+        lines = nmesh * 2 + 1
+
+        output, _, _ = self.terminal_command(f'tail -{lines} {modout_location}')
+
+        with open(modin_location, 'w') as f:
+            f.write(output)
+
     def run_default_evolution(self, zams_mass):
         """Performs one run from pre-ZAMS until the end of evolution.
 
@@ -132,7 +143,7 @@ class STARSController:
                            'IX': 0,
                            'IY': 0,
                            'IZ': 0,
-                           'ISTART': 0} # CHECK THIS TOO
+                           'ISTART': 0}
 
         self.output('status', 'Configuring Parameters')
         self.configure_parameters(pre_zams_params)
@@ -143,7 +154,7 @@ class STARSController:
         self.output('status', 'Moving output files')
         self.terminal_command(f'mv plot {out}/plot.zams')
         self.terminal_command(f'mv out {out}/out.zams')
-        self.terminal_command(f'tail -399 modout > modin')
+        self.modout_to_modin()
         self.terminal_command(f'mv modout {out}/modout.zams')
 
         main_evo_params = {'IML1': 5,
@@ -152,7 +163,7 @@ class STARSController:
                            'IX': 1,
                            'IY': 1,
                            'IZ': 1,
-                           'ISTART': 1} # CHECK THIS
+                           'ISTART': 1}
 
         self.output('status', 'Configuring Parameters')
         self.configure_parameters(main_evo_params)
