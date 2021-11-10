@@ -26,10 +26,21 @@ class Plotfile:
         else:
             raise TypeError("One of these items isn't a Plotfile object.")
 
-    def plot(self, x_axis, y_axis, color='red', alpha=1):
+    def plot(self, x_axis, y_axis, **kwargs):
+        """Plots the parameter given by x_axis against y_axis.
+
+        Arguments:
+            x_axis {str} -- The x-axis to plot. Must be a key of self._data
+            y_axis {str} -- The y-axis to plot. Must be a key of self._data
+            **kwargs {variable} -- Any keyword arguments to be passed to plt.plot.
+
+        Returns:
+            obj {list} -- The list of Line2d objects plotted by plt.plot.
+        """
         x_arr = self._data[x_axis].to_numpy()
         y_arr = self._data[y_axis].to_numpy()
 
+        # Check if we have to stitch together multiple files
         if len(self._segment_points) > 1:
             for i in range(len(self._segment_points)):
                 si = self._segment_points[i]
@@ -44,15 +55,13 @@ class Plotfile:
                     x = x_arr[si:]
                     y = y_arr[si:]
 
-                plt.plot(x, y,
-                         color=color,
-                         alpha=alpha)
+                obj = plt.plot(x, y, **kwargs)
         else:
             x = x_arr
             y = y_arr
-            plt.plot(x, y,
-                     color=color,
-                     alpha=alpha)
+            obj = plt.plot(x, y, **kwargs)
+
+        return obj
 
     def parse_plotfile(self, fname):
         # https://youtu.be/4THFRpw68oQ?t=34
@@ -82,7 +91,7 @@ class Plotfile:
         return df, status
 
 class ClusteredPlotfile:
-    def __init__(self, directory, indexes):
+    def __init__(self, directory, indexes, file_names=['zams', 'model']):
         self._pfiles = dict()
 
         for idx in indexes:
@@ -96,7 +105,7 @@ class ClusteredPlotfile:
         self._vmin = np.amin(indexes)-0.5
         self._vmax = np.amax(indexes)+0.5
 
-    def plot(self, x_axis, y_axis, cbar_label):
+    def plot(self, x_axis, y_axis, cbar_label, cmap='jet', alpha=1):
         fig = plt.figure()
 
         norm = matplotlib.colors.Normalize(
@@ -104,8 +113,7 @@ class ClusteredPlotfile:
             vmax=self._vmax)
 
         # choose a colormap
-        c_m = matplotlib.cm.jet
-        alpha = 1
+        c_m = plt.get_cmap(cmap)
 
         # create a ScalarMappable and initialize a data structure
         s_m = matplotlib.cm.ScalarMappable(cmap=c_m, norm=norm)
@@ -121,3 +129,5 @@ class ClusteredPlotfile:
         cbar = fig.colorbar(s_m)#, ax=fig.gca())
 
         cbar.set_label(cbar_label)
+
+        return fig
