@@ -152,6 +152,18 @@ class Model:
                                                        'X_C', "X_Ne", 'X_N',
                                                        'H_orb', 'H_spin', 'X_3He'])
 
+        # These four parameters are log_e whereas other log parameters
+        # are log_10. Change their base:
+        df['logf'] /= np.log(10)
+        df['logT'] /= np.log(10)
+        df['logm'] /= np.log(10)
+        df['logr'] /= np.log(10)
+
+        df_deltas['logf'] /= np.log(10)
+        df_deltas['logT'] /= np.log(10)
+        df_deltas['logm'] /= np.log(10)
+        df_deltas['logr'] /= np.log(10)
+
         self.__data = df
         self.__deltas = df_deltas
 
