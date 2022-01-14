@@ -299,7 +299,7 @@ class DataFileParser:
 
             def make_backup(self):
                 with open(self._datafile + ".bak", 'w') as file:
-                    self._write_to_pointer(file, self._original_contents)
+                    self._write_to_pointer(file, self._original_contents, 'w')
 
             def backup_if_not_exists(self):
                 if not path.exists(self._datafile + ".bak"):

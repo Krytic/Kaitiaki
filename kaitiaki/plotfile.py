@@ -79,9 +79,8 @@ class Plotfile:
              'Rconv_env', 'logrho', 'logTc']
 
         if path.exists(f'{fname}'):
-          df = pd.read_csv(fname,
-                           names=c,
-                           sep='\s+')
+          df = pd.read_fwf(fname,
+                           names=c)
 
           status = 'loaded'
         else:
