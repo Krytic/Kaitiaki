@@ -93,11 +93,19 @@ class ClusteredPlotfile:
     def __init__(self, directory, indexes, file_names=['zams', 'model']):
         self._pfiles = dict()
 
-        for idx in indexes:
-            zams_file = Plotfile(f'{directory}/plot.zams.{idx}')
-            postzams  = Plotfile(f'{directory}/plot.model.{idx}')
 
-            pfile = zams_file + postzams
+        for idx in indexes:
+            n = 0
+
+            for file in file_names:
+                F = Plotfile(f'{directory}/plot.{file}.{idx}')
+
+                if n == 0:
+                    pfile = F
+                else:
+                    pfile = pfile + F
+
+                n += 1
 
             self._pfiles[idx] = pfile
 

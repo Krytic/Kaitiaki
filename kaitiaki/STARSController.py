@@ -1,13 +1,13 @@
 from copy import deepcopy
 from decimal import Decimal
-from os import path
 import os
+from os import path
 import time
 
-import pandas as pd
-import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 import subprocess
 from tqdm import tqdm
 
@@ -41,7 +41,8 @@ class STARSController:
         nothing otherwise.
 
         Arguments:
-            type {string} -- The message type (warning, error, info, status) to output
+            type {string} -- The message type (warning, error, info,
+                             status) to output
             message {string} -- The message to output
         """
         if self._verbose_output:
@@ -71,6 +72,20 @@ class STARSController:
             f.truncate()
 
     def setup_binary_evolution(self):
+        """
+        Modifies data to allow for binary evolution. Sets the following
+        parameters:
+            ID block for binaries
+            IMODE   - To 2 (binaries)
+            IML1    - To 5 (custom) TODO: Check what prescription is
+            IML2    - To 5 (custom)
+            RML     - 0 (off)
+            ITH     - 1 (on)
+            IX      - 1 (on)
+            IY      - 1 (on)
+            IZ      - 1 (on)
+            ISTART  - 1 (reset age, nmod, dt)
+        """
         binary_block = """ 14 14  0  9  1102  0  0  0 99
   1  2  4 16 17 19 13 14 29  5  3  9 10 11 12 15 20 18 24 25 26 27 30  8  7  6 23 22 21  0
   7  8  9 10 11 12 14 22 23 24 25 26 27 29  4  2  1  3  5  6 19 17 16 13 28 18 20 21  0  0
@@ -93,6 +108,20 @@ class STARSController:
         self.configure_parameters(params)
 
     def setup_single_evolution(self):
+        """
+        Modifies data to allow for single star evolution. Sets the following
+        parameters:
+            ID block for single stars
+            IMODE   - To 1 (single stars)
+            IML1    - To 5 (custom) TODO: Check what prescription is
+            IML2    - To 0 (off - shouldn't matter though)
+            RML     - 0 (off)
+            ITH     - 1 (on)
+            IX      - 1 (on)
+            IY      - 1 (on)
+            IZ      - 1 (on)
+            ISTART  - 1 (reset age, nmod, dt)
+        """
         single_block = """  6  7  0  3  0 76  0  0  0 99
   1  2  4  5  3  9 10 11 12 15  8  7  6  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
   7  8  9 10 11 12 14  4  2  1  3  5  6  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
@@ -103,6 +132,7 @@ class STARSController:
         params = {
             'imode': 1,
             'IML1': 5,
+            'IML2': 0,
             'RML': 0,
             'ITH': 1,
             'IX': 1,
@@ -228,6 +258,9 @@ class STARSController:
     def run_default_evolution(self, zams_mass):
         """Performs one run from pre-ZAMS until the end of evolution.
         Assumes NORMAL file structure.
+
+        Not really useful for scientific applications -- just here
+        for educational purposes on how STARS runs.
 
         Arguments:
             zams_mass {float} -- The ZAMS mass we should target.

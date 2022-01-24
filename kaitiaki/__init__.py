@@ -28,7 +28,9 @@ import kaitiaki.GridMaker as gridmaker
 
 from kaitiaki._metadata import __version__
 
-def debug(msgtype, message):
+DEBUG_MODE = False
+
+def debug(msgtype, message, logfile_location=".log", fatal=False):
     """General purpose debug message handler
 
     Allows us to print to stdout when debugging (developing) and fail
@@ -40,18 +42,29 @@ def debug(msgtype, message):
         message {string} -- The message to throw.
 
     """
+
     assert msgtype in ['warning',
                        'error',
                        'info',
                        'status'], f"Message type \"{msgtype}\" is not recognised."
 
-    if msgtype == 'warning':
-        header = "\033[93m\033[1m[WARNING]\033[0m "
-    elif msgtype == 'error':
-        header = "\033[91m\033[1m[ERROR]\033[0m "
-    elif msgtype == 'info':
-        header = "\033[96m\033[1m[INFO]\033[0m "
-    elif msgtype == 'status':
-        header = "\033[92m\033[1m[PROGRAM STATUS]\033[0m "
+    endc = "\033[0m"
 
-    print(header + str(message))
+    if msgtype == 'warning':
+        hdr = "\033[93m\033[1m"
+        header = "[WARNING]"
+    elif msgtype == 'error':
+        hdr = "\033[91m\033[1m"
+        header = "[ERROR]"
+    elif msgtype == 'info':
+        hdr = "\033[96m\033[1m"
+        header = "[INFO]"
+    elif msgtype == 'status':
+        hdr = "\033[92m\033[1m"
+        header = "[PROGRAM STATUS]"
+
+    if DEBUG_MODE or fatal:
+        print(f"{hdr}{header}{endc} {message}")
+    else:
+        with open(logfile_location, 'a') as f:
+            f.write(f"{header} {message}\n")
