@@ -239,7 +239,7 @@ Masses: {self._masses}"""
                         modin = f.read()
 
                 # Write to file.
-                with open(f"models/{directory}/modin", "w") as f:
+                with open(f"models/{metal}/{directory}/modin", "w") as f:
                     f.write(modin)
 
                 # Move data to this subdirectory. User can overwrite
@@ -248,10 +248,10 @@ Masses: {self._masses}"""
                 data = data.decode("utf-8")
 
                 # Write to file.
-                with open(f"models/{directory}/data", "w") as f:
+                with open(f"models/{metal}/{directory}/data", "w") as f:
                     f.write(data)
 
-                f = f'models/{directory}/data'
+                f = f'models/{metal}/{directory}/data'
 
                 # Set default parameters.
                 # I thought about making this customisable, but
