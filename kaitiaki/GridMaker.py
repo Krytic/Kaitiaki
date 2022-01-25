@@ -201,7 +201,7 @@ Masses: {self._masses}"""
         if response == 'y':
             # Create my model directory.
             STARS.terminal_command("mkdir models")
-            STARS.terminal_command(f"mkdir models/{metallicity}")
+            STARS.terminal_command(f"mkdir models/{self.metallicity}")
 
             # Shuffle COTables around. We need the COtable kaitiaki stores.
             if self._COtable_location[1] == "int":
