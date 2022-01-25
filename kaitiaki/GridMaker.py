@@ -225,10 +225,10 @@ Masses: {self._masses}"""
 
                 if self.masses_logged: mass = 10**mass
 
-                STARS.terminal_command(f"mkdir models/{metallicity}/{directory}")
-
                 # Move modin to this subdirectory
                 metal = self.metallicity
+
+                STARS.terminal_command(f"mkdir models/{metal}/{directory}")
 
                 if self._modin_location[1] == 'int':
                     modin_bak = f"../backup_data/modins/modin.bak.{metal}"
