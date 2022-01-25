@@ -10,12 +10,28 @@ import subprocess
 from tqdm import tqdm
 
 class Plotfile:
-    def __init__(self, file):
+    def __init__(self, file, attempt_loading_mplstylefile=False):
         self._data, status = self.parse_plotfile(file)
         self._segment_points = []
 
         if status == 'skipped':
             raise OSError("Requested file does not exist")
+
+        # This is a staggered attempt to load an inbuilt matplotlib
+        # style file.
+        if attempt_loading_mplstylefile:
+            try:
+                # See if the krytic stylefile is available...
+                plt.style.use("krytic")
+            except: # it isn't...
+                try:
+                    # what if it's in the current directory?
+                    plt.style.use("krytic.mplstyle")
+                except: # it isn't...
+                    # Screw it, we'll just ignore it (it's a style file,
+                    # it doesn't matter for actual plotting, just
+                    # visualisation)
+                    pass
 
     def __add__(self, other):
         if isinstance(other, Plotfile):
@@ -25,6 +41,13 @@ class Plotfile:
             return self
         else:
             raise TypeError("One of these items isn't a Plotfile object.")
+
+    def access(self):
+        return self._data
+
+    def hr_diagram(self, **kwargs):
+        self.plot('logT', 'logL', **kwargs)
+        plt.gca().invert_xaxis()
 
     def plot(self, x_axis, y_axis, **kwargs):
         """Plots the parameter given by x_axis against y_axis.
@@ -79,13 +102,42 @@ class Plotfile:
              'Rconv_env', 'logrho', 'logTc']
 
         if path.exists(f'{fname}'):
-          df = pd.read_fwf(fname,
-                           names=c)
+            # Following is a python implementation of the following
+            # FORTRAN 77 format statement. We must encode this manually.
+            # Note that Pandas does have an infer_nrows option for
+            # pd.read_fwf, but the inference can be a little strange
+            # sometimes, so I prefer to manually define it (since we
+            # know the widths a priori anyway from STARS). Note that
+            # the P statement adjusts the scaling factor and does not
+            # contribute to the output short of determining precisely
+            # where the decimal point sits. For this purpose, however,
+            # that is irrelevant.
+            # I6,1P,E16.9,0P,24F10.5,1P,3E13.6,18(1X,E12.5),0P,52F9.5
+            spec = ([6,16]                               # I6, E16.9
+                 + [10 for _ in range(24)]               # 24F10.5
+                 + [13, 13, 13]                          # 3E13.6
+                 + [i for _ in range(18) for i in (1,12)]#18(1X,E12.5)
+                 + [9 for _ in range(52)])               # 52F9.5
+            # The spec extends out to ~100 columns to future proof it
+            # I think, so we have to truncate it here to the length of
+            # what we know is in the file.
+            spec = spec[:len(c)]
 
-          status = 'loaded'
+            # That giant comment aside, though, something is broken in
+            # that spec because some values are not being read properly
+            # in some test files (e.g., reads NaN instead of 1e+34).
+
+            # Temporary fix: set infer_nrows to 99999, the highest
+            # theoretical length of plot.
+
+            df = pd.read_fwf(fname,
+                             names=c,
+                             infer_nrows=99999)
+
+            status = 'loaded'
         else:
-          df = None
-          status = 'skipped'
+            df = None
+            status = 'skipped'
 
         return df, status
 
