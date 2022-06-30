@@ -37,5 +37,6 @@ setup(name='kaitiaki',
       install_requires  = ['numpy',
                            'matplotlib',
                            'pandas',
+                           'file_read_backwards'
                           ]
     )

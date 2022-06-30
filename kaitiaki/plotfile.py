@@ -10,12 +10,17 @@ import subprocess
 from tqdm import tqdm
 
 class Plotfile:
-    def __init__(self, file, attempt_loading_mplstylefile=False):
+    def __init__(self, file,
+                       attempt_loading_mplstylefile=False,
+                       allow_pad_age=False):
+
         self._data, status = self.parse_plotfile(file)
         self._segment_points = []
 
         if status == 'skipped':
             raise OSError("Requested file does not exist")
+
+        self._allow_pad_age = allow_pad_age
 
         # This is a staggered attempt to load an inbuilt matplotlib
         # style file.
@@ -33,10 +38,17 @@ class Plotfile:
                     # visualisation)
                     pass
 
+    def last(self):
+        return self._data.iloc[-1:]
+
     def __add__(self, other):
         if isinstance(other, Plotfile):
+            if self._allow_pad_age:
+                other.pad_age(self.access()['age'].to_numpy()[-1])
+
             self._segment_points.append(len(self._data))
             self._data = self._data.append(other._data)
+
 
             return self
         else:
@@ -45,11 +57,65 @@ class Plotfile:
     def access(self):
         return self._data
 
-    def hr_diagram(self, **kwargs):
-        self.plot('logT', 'logL', **kwargs)
-        plt.gca().invert_xaxis()
+    def hr_diagram(self, ax=None, **kwargs):
+        if ax is None:
+            ax = plt.gca()
 
-    def plot(self, x_axis, y_axis, **kwargs):
+        self.plot('logT', 'logL', **kwargs)
+        ax.invert_xaxis()
+
+    def kippenhahn_diagram(self, distinguish_envelopes: bool=False,
+                                 legend: bool=True,
+                                 x_axis: str='modelnum',
+                                 **kwargs):
+
+        err_msg = "x_axis must be collapsetime, modelnum, or age."
+
+        assert x_axis in ['collapsetime', 'modelnum', 'age'], err_msg
+
+        ax = plt.gca()
+
+        if x_axis == 'modelnum':
+            X = 'N'
+            x_label = "Model Number"
+        elif x_axis == 'collapsetime':
+            X = 'collapsetime'
+            x_label = "Time until collapse [yr]"
+        elif x_axis == 'age':
+            X = 'age'
+            x_label = "Age [yr]"
+
+        self.plot(X, 'MH', c='b', ls='-', label="He core mass") # Helium Core Mass
+        self.plot(X, 'MHe', c='k', ls='-', label="CO core mass") # CO Core Mass
+
+        for env in range(1, 13):
+            if distinguish_envelopes:
+                label = "(semi)conductive envelope"
+            else:
+                label = "Conductive Envelope"
+
+            lab = None if env < 12 else label
+
+            self.plot(X, f'Mconv_{env}', c='r',
+                                         ls='',
+                                         marker='.',
+                                         label=lab,
+                                         absolute=(not distinguish_envelopes))
+
+        self.plot(X, 'M', c='y', ls='-', label="Total Mass")
+
+        ZAMS = self.access()['M'].to_numpy()[0]
+
+        ax.set_title(rf"$M_{{\rm ZAMS}}={ZAMS}M_\odot$ star")
+
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(r'Mass co-ordinate')
+
+        if legend:
+            ax.legend()
+
+
+    def plot(self, x_axis, y_axis, unlog='neither', absolute=False, **kwargs):
         """Plots the parameter given by x_axis against y_axis.
 
         Arguments:
@@ -60,8 +126,27 @@ class Plotfile:
         Returns:
             obj {list} -- The list of Line2d objects plotted by plt.plot.
         """
-        x_arr = self._data[x_axis].to_numpy()
+        if x_axis == 'collapsetime':
+            age_at_collapse = self.access()['age'].to_numpy()[-1]
+            time_until_collapse = age_at_collapse \
+                                  - self.access()['age'].to_numpy()
+
+            x_arr = time_until_collapse
+        else:
+            x_arr = self._data[x_axis].to_numpy()
+
         y_arr = self._data[y_axis].to_numpy()
+
+        if unlog == 'y':
+            y_arr = 10 ** y_arr
+        elif unlog == 'x':
+            x_arr = 10 ** x_arr
+        elif unlog == 'both':
+            y_arr = 10 ** y_arr
+            x_arr = 10 ** x_arr
+
+        if absolute:
+            y_arr = np.abs(y_arr)
 
         # Check if we have to stitch together multiple files
         if len(self._segment_points) > 1:
@@ -86,8 +171,21 @@ class Plotfile:
 
         return obj
 
+    def pad_age(self, by):
+        self._data['age'] += by
+
     def parse_plotfile(self, fname):
-        # https://youtu.be/4THFRpw68oQ?t=34
+        """
+        Parses a plotfile.
+
+        NOTE that MHe is the mass of the He-*exhausted* core. So it is
+        technically the CO core mass.
+        Similarly MH is the H-*exhausted* core! So it is technically the
+        He core mass.
+
+        This design decision was made by the maintainers of STARS. We use their
+        terminology to be consistent.
+        """
         c = ['N', 'age', 'logR', 'logT', 'logL', 'M', 'MH', 'MHe', 'LH',
              'LHe', 'LC', 'Mconv_1', 'Mconv_2', 'Mconv_3', 'Mconv_4',
              'Mconv_5', 'Mconv_6', 'Mconv_7', 'Mconv_8', 'Mconv_9',
@@ -116,7 +214,8 @@ class Plotfile:
             spec = ([6,16]                               # I6, E16.9
                  + [10 for _ in range(24)]               # 24F10.5
                  + [13, 13, 13]                          # 3E13.6
-                 + [i for _ in range(18) for i in (1,12)]#18(1X,E12.5)
+                 # should the i in the following LC be a _?
+                 + [12 for _ in range(18)]# for i in (1,12)]#18(1X,E12.5)
                  + [9 for _ in range(52)])               # 52F9.5
             # The spec extends out to ~100 columns to future proof it
             # I think, so we have to truncate it here to the length of

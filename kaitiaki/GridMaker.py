@@ -16,6 +16,28 @@ from tqdm import tqdm
 
 import kaitiaki
 
+def _allocate_cores(reserve_core: bool):
+    offset = 0
+
+    if reserve_core: offset = int(mp.cpu_count() / 4)
+
+    return mp.cpu_count() - offset
+
+def _worker_evolve(directory, timeout, mass):
+    # our paralellised worker function. Shouldn't be necessary
+    # for other uses.
+    STARS = kaitiaki.STARS.STARSController(run_bs="../../..")
+
+    out, err, reason = STARS.run(timeout=timeout,
+                                 cwd=directory)
+
+    if reason == 'finished':
+        if 0.8 <= mass <= 1.6:
+            STARS.evolve_through_helium_flash(timeout=timeout,
+                                              filedir=directory)
+
+    return out, err, reason
+
 def _worker(directory, timeout):
     # our paralellised worker function. Shouldn't be necessary
     # for other uses.
@@ -134,6 +156,11 @@ class GridMaker:
             raise ValueError(("Incorrectly formatted metallicity. "
                               "I expect a format like \"z020\" for solar "
                               "(0.020)."))
+
+        self._grid_status = 'initialized'
+
+    def get_status(self):
+        return self._grid_status
 
     def __str__(self):
         return f"""GridMaker Object.
@@ -290,6 +317,8 @@ Masses: {self._masses}"""
 
             kaitiaki.debug("info", f"Grid set up.")
 
+            self._grid_status = 'setup'
+
             return True
         else:
             kaitiaki.debug("info", "Grid setup aborted.")
@@ -330,17 +359,12 @@ Masses: {self._masses}"""
                         stdout, stderr, reason
         """
 
-        if reserve_core:
-            offset = 1
-        else:
-            offset = 0
-
-        cpu = mp.cpu_count() - offset
+        cpu = _allocate_cores(reserve_core)
         pool = mp.Pool(cpu)
 
         size = len(self._masses)
         kaitiaki.debug('info', (f"Generating a grid of size {size}. "
-                                 "I am using {cpu} cores. This could "
+                                f"I am using {cpu} cores. This could "
                                  "take some time!"))
 
         outputs = []
@@ -371,6 +395,92 @@ Masses: {self._masses}"""
 
         for r in outputs:
             outs.append((r[0], r[1].get()))
+
+        self._grid_status = 'made'
+
+        return outs
+
+    def evolve_grid(self, timeout=45*60, reserve_core=True):
+        """Executes STARS to evolve a ZAMS grid until the end of evolution.
+
+        Performs the actual evolution. This function is quasi-blocking:
+        processes will run independently, however it shan't return until
+        every instance terminates.
+
+        This function is parallelized and can run a task on each CPU
+        core available.
+
+        If the grid has not been initialized with setup_grid(), this
+        will attempt setup. If you've already set up a grid in a previous
+        script, this will change nothing (you will have to indicate
+        consent, this function does not assume that).
+
+        Keyword Arguments:
+            timeout {float} -- the timeout (in seconds) to apply to
+                               run_bs. (default: 1200, 20 minutes.)
+            reserve_core {bool} -- Whether to reserve a core for the
+                                   user to interact with their machine
+                                   (True) or not (False). Set to False
+                                   if you plan on running this on a
+                                   cluster: it's only useful if you don't
+                                   want to brick your work machine doing
+                                   this code. (default: True)
+
+        Returns:
+            list -- a list corresponding to the outputs. Each element is
+                    a 2-tuple, containing (mass, response), where
+                    response is the output of a call to
+                    STARSController.terminal_command, i.e., a 3-tuple:
+                        stdout, stderr, reason
+        """
+
+        cpu = _allocate_cores(reserve_core)
+        pool = mp.Pool(cpu)
+
+        size = len(self._masses)
+        kaitiaki.debug('info', (f"Properly Evolving a grid of size {size}. "
+                                f"I am using {cpu} cores. This could "
+                                 "take some time!"))
+
+        outputs = []
+
+        outs = []
+
+        if self._grid_status == 'initialized':
+            kaitiaki.debug("info", "I have to set up the grid first.")
+            self.setup_grid()
+
+        if self._grid_status == 'setup':
+            kaitiaki.debug('info', "Grid not made! Attmepting recovery...")
+            self.make_grid()
+
+        pbar = tqdm(total=size)
+
+        for mass in self._masses:
+            # replace * with masses. Same structure as previously.
+            try:
+                directory = self._models_dir.replace('*', str(mass))
+            except AttributeError:
+                if self._grid_status == 'initialized':
+                    kaitiaki.debug("error", ("Model grid not set up. "
+                                             "Attempting recovery with default "
+                                             "parameters..."))
+
+                    self.setup_grid()
+
+            if self.masses_logged: mass = 10**mass
+
+            update = lambda *a: pbar.update()
+            out = pool.apply_async(_worker_evolve,
+                                   args=(directory,timeout,mass),
+                                   callback=update)
+
+            outputs.append((mass, out))
+
+        for r in outputs:
+            outs.append((r[0], r[1].get()))
+
+        self._grid_status = 'evolved'
 
         return outs
 
@@ -437,12 +547,7 @@ Masses: {self._masses}"""
         outs = []
         pbar = tqdm(total=size)
 
-        if reserve_core:
-            offset = 1
-        else:
-            offset = 0
-
-        cpu = mp.cpu_count() - offset
+        cpu = _allocate_cores(reserve_core)
         pool = mp.Pool(cpu)
 
         for mass in self._masses:

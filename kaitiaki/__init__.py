@@ -25,12 +25,20 @@ import kaitiaki.DataFileParser as datafile
 import kaitiaki.plotfile as plotfile
 import kaitiaki.STARSController as STARS
 import kaitiaki.GridMaker as gridmaker
+import kaitiaki.helpers as helpers
+import kaitiaki.constants as constants
+import kaitiaki.outfile as out
+import kaitiaki.classifier as classify
+
+import glisten
 
 from kaitiaki._metadata import __version__
 
 DEBUG_MODE = False
 
-def debug(msgtype, message, logfile_location=".log", fatal=False):
+log = glisten.log.Logger('.log')
+
+def debug(msgtype, message, fatal=False):
     """General purpose debug message handler
 
     Allows us to print to stdout when debugging (developing) and fail
@@ -47,24 +55,11 @@ def debug(msgtype, message, logfile_location=".log", fatal=False):
                        'error',
                        'info',
                        'status'], f"Message type \"{msgtype}\" is not recognised."
-
-    endc = "\033[0m"
-
-    if msgtype == 'warning':
-        hdr = "\033[93m\033[1m"
-        header = "[WARNING]"
-    elif msgtype == 'error':
-        hdr = "\033[91m\033[1m"
-        header = "[ERROR]"
-    elif msgtype == 'info':
-        hdr = "\033[96m\033[1m"
-        header = "[INFO]"
+    if msgtype == 'info':
+        log.info(message)
     elif msgtype == 'status':
-        hdr = "\033[92m\033[1m"
-        header = "[PROGRAM STATUS]"
-
-    if DEBUG_MODE or fatal:
-        print(f"{hdr}{header}{endc} {message}")
-    else:
-        with open(logfile_location, 'a') as f:
-            f.write(f"{header} {message}\n")
+        log.status(message)
+    elif msgtype == 'warning':
+        log.warn(message)
+    elif msgtype == 'error':
+        log.error(message)

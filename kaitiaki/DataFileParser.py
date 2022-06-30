@@ -278,7 +278,7 @@ class DataFileParser:
                                  'sgthfac':   (20,34,None),
 
                                  'istart':    (21,0,2),     'hkh':       (21,2,11),
-                                 'gff':       (21,11,None)
+                                 'gff':       (21,11,19),   'nnmod':     (21,19,None)
                                 }
 
                 """

@@ -3,6 +3,10 @@ data/
 *.pickle
 output/
 
+# Gigantic files
+backup_data/pseudo_evolution/modout
+backup_data/pseudo_evolution/modout.hdf5
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
