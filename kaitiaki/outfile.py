@@ -4,6 +4,29 @@ import numpy as np
 
 import kaitiaki
 
+def get_last_converged_model(self, file):
+    from file_read_backwards import FileReadBackwards
+    from queue import Queue
+
+    q = []
+
+    i = 0
+
+    with FileReadBackwards(file, encoding="utf-8") as frb:
+        for l in frb:
+            while len(q) > 8:
+                q.pop(0)
+            q.append(l)
+            if 'dt/age/MH/MHe' in l.strip():
+                break
+
+    modelblock = []
+
+    for l in reversed(q):
+        modelblock.append(l)
+
+    return kaitiaki.out.ModelSummary(modelblock)
+
 class ModelSummary:
     def _parse_block(self, model):
         self._datapoints = dict()
