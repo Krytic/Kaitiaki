@@ -89,6 +89,9 @@ class STARSController:
         self._run_bs_location = run_bs
         self._datafile = "data"
 
+    def update_datafile(self, new_location):
+        self._datafile = new_location
+
     def update_run_bs(self, loc):
         self._run_bs_location = loc
 
@@ -480,8 +483,6 @@ class STARSController:
         # self._datafile = OLD_DFILE_LOC
 
         return outs
-
-
 
     def evolve_through_helium_flash(self, timeout=30*60, filedir="."):
         modelblock = self.get_last_converged_model(f'{filedir}/out')

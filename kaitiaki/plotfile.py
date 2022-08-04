@@ -1,5 +1,6 @@
 from copy import deepcopy
 from decimal import Decimal
+import itertools
 from os import path
 
 import pandas as pd
@@ -8,6 +9,36 @@ import matplotlib
 import matplotlib.pyplot as plt
 import subprocess
 from tqdm import tqdm
+
+def get_last_line(self, file):
+    from file_read_backwards import FileReadBackwards
+
+    c = ['N', 'age', 'logR', 'logT', 'logL', 'M', 'MH', 'MHe', 'LH',
+              'LHe', 'LC', 'Mconv_1', 'Mconv_2', 'Mconv_3', 'Mconv_4',
+              'Mconv_5', 'Mconv_6', 'Mconv_7', 'Mconv_8', 'Mconv_9',
+              'Mconv_10', 'Mconv_11', 'Mconv_12', 'MHmax', 'MHemax',
+              'logK', 'dt', 'XHs', 'XHes', 'XCs', 'XNs', 'XOs', 'X3Hes',
+              'R/RL', 'J1', 'PBin', 'rsep', 'Mtot', 'Jorb', 'J1+J2', 'Jtot',
+              'worb', 'w1', 'I1', 'Iorb', 'Mdot', 'Mshell_1', 'Mshell_2',
+              'Mshell_3', 'Mshell_4', 'Mshell_5', 'Mshell_6', 'Mshell_7',
+              'Mshell_8', 'Mshell_9', 'Mshell_10', 'Mshell_11', 'Mshell_12',
+              'Mth_1', 'Mth_2', 'Mth_3', 'Mth_4', 'Mth_5', 'Mth_6', 'Mth_7',
+              'Mth_8', 'Mth_9', 'Mth_10', 'Mth_11', 'Mth_12', 'Mconv_env',
+              'Rconv_env', 'logrho', 'logTc']
+
+    with FileReadBackwards(file, encoding="utf-8") as frb:
+        line = frb.readline()
+
+    spec = ([6,16]                               # I6, E16.9
+         + [10 for _ in range(24)]               # 24F10.5
+         + [13, 13, 13]                          # 3E13.6
+         # should the i in the following LC be a _?
+         + [12 for _ in range(18)]# for i in (1,12)]#18(1X,E12.5)
+         + [9 for _ in range(52)])               # 52F9.5
+
+    for i, col in enumerate(c):
+        width = spec[i]
+        # Continue writing parser.
 
 class Plotfile:
     def __init__(self, file,
@@ -58,22 +89,24 @@ class Plotfile:
         return self._data
 
     def hr_diagram(self, ax=None, **kwargs):
-        if ax is None:
-            ax = plt.gca()
-
-        self.plot('logT', 'logL', **kwargs)
-        ax.invert_xaxis()
+        obj = self.plot('logT', 'logL', ax=ax, **kwargs)
+        xlim = obj[0].axes.get_xlim()
+        if xlim[0] < xlim[1]:
+            obj[0].axes.invert_xaxis()
 
     def kippenhahn_diagram(self, distinguish_envelopes: bool=False,
                                  legend: bool=True,
                                  x_axis: str='modelnum',
+                                 ax=None,
+                                 annotate: bool=True,
                                  **kwargs):
 
         err_msg = "x_axis must be collapsetime, modelnum, or age."
 
         assert x_axis in ['collapsetime', 'modelnum', 'age'], err_msg
 
-        ax = plt.gca()
+        if ax is None:
+            ax = plt.gca()
 
         if x_axis == 'modelnum':
             X = 'N'
@@ -85,8 +118,17 @@ class Plotfile:
             X = 'age'
             x_label = "Age [yr]"
 
-        self.plot(X, 'MH', c='b', ls='-', label="He core mass") # Helium Core Mass
-        self.plot(X, 'MHe', c='k', ls='-', label="CO core mass") # CO Core Mass
+        self.plot(X, 'MH',
+                     c='b',
+                     ls='-',
+                     label="He core mass",
+                     ax=ax) # Helium Core Mass
+
+        self.plot(X, 'MHe',
+                     c='k',
+                     ls='-',
+                     label="CO core mass",
+                     ax=ax) # CO Core Mass
 
         for env in range(1, 13):
             if distinguish_envelopes:
@@ -100,22 +142,23 @@ class Plotfile:
                                          ls='',
                                          marker='.',
                                          label=lab,
-                                         absolute=(not distinguish_envelopes))
+                                         absolute=(not distinguish_envelopes),
+                                         ax=ax)
 
-        self.plot(X, 'M', c='y', ls='-', label="Total Mass")
+        self.plot(X, 'M', c='y', ls='-', label="Total Mass", ax=ax)
 
         ZAMS = self.access()['M'].to_numpy()[0]
 
-        ax.set_title(rf"$M_{{\rm ZAMS}}={ZAMS}M_\odot$ star")
-
-        ax.set_xlabel(x_label)
-        ax.set_ylabel(r'Mass co-ordinate')
+        if annotate:
+            ax.set_title(rf"$M_{{\rm ZAMS}}={ZAMS}M_\odot$ star")
+            ax.set_xlabel(x_label)
+            ax.set_ylabel(r'Mass co-ordinate')
 
         if legend:
             ax.legend()
 
 
-    def plot(self, x_axis, y_axis, unlog='neither', absolute=False, **kwargs):
+    def plot(self, x_axis, y_axis, unlog='neither', age_unit=None, absolute=False, ax=None, **kwargs):
         """Plots the parameter given by x_axis against y_axis.
 
         Arguments:
@@ -148,6 +191,13 @@ class Plotfile:
         if absolute:
             y_arr = np.abs(y_arr)
 
+        if ax is None:
+            ax = plt.gca()
+        else:
+            ax = ax
+
+        plt.sca(ax)
+
         # Check if we have to stitch together multiple files
         if len(self._segment_points) > 1:
             for i in range(len(self._segment_points)):
@@ -164,12 +214,13 @@ class Plotfile:
                     y = y_arr[si:]
 
                 obj = plt.plot(x, y, **kwargs)
+                objs.append(obj)
         else:
             x = x_arr
             y = y_arr
-            obj = plt.plot(x, y, **kwargs)
+            objs = [plt.plot(x, y, **kwargs)]
 
-        return obj
+        return list(itertools.chain.from_iterable(objs))
 
     def pad_age(self, by):
         self._data['age'] += by

@@ -3,6 +3,8 @@ import numpy as np
 import kaitiaki
 import takahe
 
+## TODO: This is slow as hell!
+
 def go(outfile_loc, plotfile_loc):
     """
     Classifies a model according to the modelcheck criteria used by Jan.
