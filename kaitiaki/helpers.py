@@ -1,22 +1,22 @@
 import kaitiaki
 
 class Range:
-    def __init__(self, bound_low, bound_high, inclusives="[]", mutable=False):
+    def __init__(self, bound_low, bound_high, inclusivity="[]", mutable=False):
         self._bound_low = bound_low
         self._bound_high = bound_high
 
-        self._right_inclusive = inclusives[1] == "]"
+        self._right_inclusive = inclusivity[1] == "]"
 
         self._inclusives = [None, None]
 
-        if inclusives[0] == "[":
+        if inclusivity[0] == "[":
             self._left_inclusive = True
             self._inclusives[0] = "["
         else:
             self._left_inclusive = False
             self._inclusives[0] = "("
 
-        if inclusives[1] == "]":
+        if inclusivity[1] == "]":
             self._right_inclusive = True
             self._inclusives[1] = "]"
         else:

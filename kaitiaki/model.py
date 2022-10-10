@@ -1,7 +1,7 @@
 from copy import deepcopy
 from decimal import Decimal
 from os import path
-from imageio_ffmpeg import get_ffmpeg_exe
+# from imageio_ffmpeg import get_ffmpeg_exe
 
 import pandas as pd
 import numpy as np
@@ -14,7 +14,7 @@ from tqdm import tqdm
 import kaitiaki
 
 # Use ffmpeg executable from imageio_ffmpeg to avoid installation issues
-plt.rcParams['animation.ffmpeg_path'] = get_ffmpeg_exe()
+# plt.rcParams['animation.ffmpeg_path'] = get_ffmpeg_exe()
 
 from matplotlib.animation import FuncAnimation
 
@@ -48,14 +48,8 @@ class ModelFile:
         with open(file_location, 'r') as f:
             contents = f.readlines()
 
-        # TODO
-        # First case should be to actually *read* file_location because
-        # that file tells us nmesh!
-        if path.exists(datafile_location):
-            with kaitiaki.datafile.DataFileParser(datafile_location) as dfile:
-                nmesh = dfile.get('NM2')
-        else:
-            nmesh = 199 # assume default
+        first_line = contents[0].replace('-',' -').replace('E -','E-').split()
+        nmesh = int(first_line[6])
 
         number_of_lines_per_model = 2 * nmesh + 1
 
@@ -127,30 +121,33 @@ class Model:
         self.__h_pressure = float(h_pressure)
         self.__he_pressure = float(he_pressure)
 
+        cleaned_models = []
+
         for i in range(self.__nmesh):
-            model_lines[i] = [model_lines[i][j:j+15].strip() for j in range(0, len(model_lines[i]), 15)]
-            if model_lines[i][-1] in ["\n", '']:
-                model_lines[i] = model_lines[i][:-1]
-            for j in range(len(model_lines[i])):
-                model_lines[i][j] = float(model_lines[i][j])
+            this_model = model_lines[i].replace('-',' -').replace('E -','E-').split()
+            for j in range(len(this_model)):
+                this_model[j] = float(this_model[j])
 
-            delta_lines[i] = [delta_lines[i][j:j+15].strip() for j in range(0, len(delta_lines[i]), 15)]
-            if delta_lines[i][-1] in ["\n", '']:
-                delta_lines[i] = delta_lines[i][:-1]
-            for j in range(len(delta_lines[i])):
-                delta_lines[i][j] = float(delta_lines[i][j])
+            cleaned_models.append(this_model)
 
-        df = pd.DataFrame(model_lines, columns=['logf', 'logT', 'X_O',
+
+            # delta_lines[i] = [delta_lines[i][j:j+15].strip() for j in range(0, len(delta_lines[i]), 15)]
+            # if delta_lines[i][-1] in ["\n", '']:
+            #     delta_lines[i] = delta_lines[i][:-1]
+            # for j in range(len(delta_lines[i])):
+            #     delta_lines[i][j] = float(delta_lines[i][j])
+
+        df = pd.DataFrame(cleaned_models, columns=['logf', 'logT', 'X_O',
                                                 'logm', 'X_H', 'dQ/dK',
                                                 'logr', 'L', 'X_He',
                                                 'X_C', "X_Ne", 'X_N',
                                                 'H_orb', 'H_spin', 'X_3He'])
 
-        df_deltas = pd.DataFrame(delta_lines, columns=['logf', 'logT', 'X_O',
-                                                       'logm', 'X_H', 'dQ/dK',
-                                                       'logr', 'L', 'X_He',
-                                                       'X_C', "X_Ne", 'X_N',
-                                                       'H_orb', 'H_spin', 'X_3He'])
+        # df_deltas = pd.DataFrame(delta_lines, columns=['logf', 'logT', 'X_O',
+        #                                                'logm', 'X_H', 'dQ/dK',
+        #                                                'logr', 'L', 'X_He',
+        #                                                'X_C', "X_Ne", 'X_N',
+        #                                                'H_orb', 'H_spin', 'X_3He'])
 
         # These four parameters are log_e whereas other log parameters
         # are log_10. Change their base:
@@ -159,13 +156,13 @@ class Model:
         df['logm'] /= np.log(10)
         df['logr'] /= np.log(10)
 
-        df_deltas['logf'] /= np.log(10)
-        df_deltas['logT'] /= np.log(10)
-        df_deltas['logm'] /= np.log(10)
-        df_deltas['logr'] /= np.log(10)
+        # df_deltas['logf'] /= np.log(10)
+        # df_deltas['logT'] /= np.log(10)
+        # df_deltas['logm'] /= np.log(10)
+        # df_deltas['logr'] /= np.log(10)
 
         self.__data = df
-        self.__deltas = df_deltas
+        # self.__deltas = df_deltas
 
     def get(self, column):
         return self.__data[column].to_numpy()

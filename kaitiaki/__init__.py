@@ -29,6 +29,8 @@ import kaitiaki.helpers as helpers
 import kaitiaki.constants as constants
 import kaitiaki.outfile as out
 import kaitiaki.classifier as classify
+import kaitiaki.model as model
+import kaitiaki.OptionLexer as lexer
 
 import glisten
 
@@ -63,3 +65,9 @@ def debug(msgtype, message, fatal=False):
         log.warn(message)
     elif msgtype == 'error':
         log.error(message)
+
+def run(lexer):
+    STARS = kaitiaki.STARS.STARSController()
+
+    for options in lexer:
+        STARS.configure_parameters(options)

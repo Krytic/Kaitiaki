@@ -13,8 +13,8 @@ from tqdm import tqdm
 def get_last_line(self, file):
     from file_read_backwards import FileReadBackwards
 
-    c = ['N', 'age', 'logR', 'logT', 'logL', 'M', 'MH', 'MHe', 'LH',
-              'LHe', 'LC', 'Mconv_1', 'Mconv_2', 'Mconv_3', 'Mconv_4',
+    c = ['N', 'age', 'logR', 'logT', 'logL', 'M', 'MH', 'MHe', 'logLH',
+              'logLHe', 'logLC', 'Mconv_1', 'Mconv_2', 'Mconv_3', 'Mconv_4',
               'Mconv_5', 'Mconv_6', 'Mconv_7', 'Mconv_8', 'Mconv_9',
               'Mconv_10', 'Mconv_11', 'Mconv_12', 'MHmax', 'MHemax',
               'logK', 'dt', 'XHs', 'XHes', 'XCs', 'XNs', 'XOs', 'X3Hes',
@@ -42,10 +42,13 @@ def get_last_line(self, file):
 
 class Plotfile:
     def __init__(self, file,
-                       attempt_loading_mplstylefile=False,
-                       allow_pad_age=False):
+                       allow_pad_age=True,
+                       row='all',
+                       dummy_object=False):
 
-        self._data, status = self.parse_plotfile(file)
+        assert row in ['all', 'last'], "row must be all or last"
+
+        self._data, status = self.parse_plotfile(file, row, dummy_object)
         self._segment_points = []
 
         if status == 'skipped':
@@ -53,21 +56,8 @@ class Plotfile:
 
         self._allow_pad_age = allow_pad_age
 
-        # This is a staggered attempt to load an inbuilt matplotlib
-        # style file.
-        if attempt_loading_mplstylefile:
-            try:
-                # See if the krytic stylefile is available...
-                plt.style.use("krytic")
-            except: # it isn't...
-                try:
-                    # what if it's in the current directory?
-                    plt.style.use("krytic.mplstyle")
-                except: # it isn't...
-                    # Screw it, we'll just ignore it (it's a style file,
-                    # it doesn't matter for actual plotting, just
-                    # visualisation)
-                    pass
+    def __len__(self):
+        return len(self._data)
 
     def last(self):
         return self._data.iloc[-1:]
@@ -77,11 +67,15 @@ class Plotfile:
             if self._allow_pad_age:
                 other.pad_age(self.access()['age'].to_numpy()[-1])
 
-            self._segment_points.append(len(self._data))
-            self._data = self._data.append(other._data)
+            # self._segment_points.append(len(self._data))
+            # self._data = self._data.append(other._data)
 
+            new_dataframe = Plotfile('', dummy_object=True)
+            new_dataframe._segment_points.append(len(self._data))
+            new_dataframe._data = pd.concat([self._data, other._data],
+                                            ignore_index=True)
 
-            return self
+            return new_dataframe
         else:
             raise TypeError("One of these items isn't a Plotfile object.")
 
@@ -99,6 +93,7 @@ class Plotfile:
                                  x_axis: str='modelnum',
                                  ax=None,
                                  annotate: bool=True,
+                                 cores_only: bool=False,
                                  **kwargs):
 
         err_msg = "x_axis must be collapsetime, modelnum, or age."
@@ -107,6 +102,11 @@ class Plotfile:
 
         if ax is None:
             ax = plt.gca()
+
+        TOTAL_MASS_COLOR = 'dimgrey'
+        HE_CORE_MASS_COLOR = 'slateblue'
+        CO_CORE_MASS_COLOR = 'crimson'
+        ENVELOPE_COLOR = 'green'
 
         if x_axis == 'modelnum':
             X = 'N'
@@ -119,33 +119,39 @@ class Plotfile:
             x_label = "Age [yr]"
 
         self.plot(X, 'MH',
-                     c='b',
+                     c=HE_CORE_MASS_COLOR,
                      ls='-',
                      label="He core mass",
                      ax=ax) # Helium Core Mass
 
         self.plot(X, 'MHe',
-                     c='k',
+                     c=CO_CORE_MASS_COLOR,
                      ls='-',
                      label="CO core mass",
                      ax=ax) # CO Core Mass
 
-        for env in range(1, 13):
-            if distinguish_envelopes:
-                label = "(semi)conductive envelope"
-            else:
-                label = "Conductive Envelope"
+        if not cores_only:
+            for env in range(1, 13):
+                if distinguish_envelopes:
+                    label = "(semi)conductive envelope"
+                else:
+                    label = "Conductive Envelope"
 
-            lab = None if env < 12 else label
+                lab = None if env < 12 else label
 
-            self.plot(X, f'Mconv_{env}', c='r',
-                                         ls='',
-                                         marker='.',
-                                         label=lab,
-                                         absolute=(not distinguish_envelopes),
-                                         ax=ax)
+                absolute = not distinguish_envelopes
 
-        self.plot(X, 'M', c='y', ls='-', label="Total Mass", ax=ax)
+                self.plot(X, f'Mconv_{env}', c=ENVELOPE_COLOR,
+                                             ls='',
+                                             marker='.',
+                                             label=lab,
+                                             absolute=absolute,
+                                             ax=ax)
+
+        self.plot(X, 'M', c=TOTAL_MASS_COLOR,
+                          ls='-',
+                          label="Total Mass",
+                          ax=ax)
 
         ZAMS = self.access()['M'].to_numpy()[0]
 
@@ -187,6 +193,8 @@ class Plotfile:
         elif unlog == 'both':
             y_arr = 10 ** y_arr
             x_arr = 10 ** x_arr
+        elif unlog == 'not y':
+            y_arr = np.log10(y_arr)
 
         if absolute:
             y_arr = np.abs(y_arr)
@@ -225,7 +233,7 @@ class Plotfile:
     def pad_age(self, by):
         self._data['age'] += by
 
-    def parse_plotfile(self, fname):
+    def parse_plotfile(self, fname, row, is_dummy):
         """
         Parses a plotfile.
 
@@ -250,7 +258,7 @@ class Plotfile:
              'Mth_8', 'Mth_9', 'Mth_10', 'Mth_11', 'Mth_12', 'Mconv_env',
              'Rconv_env', 'logrho', 'logTc']
 
-        if path.exists(f'{fname}'):
+        if path.exists(f'{fname}') or is_dummy:
             # Following is a python implementation of the following
             # FORTRAN 77 format statement. We must encode this manually.
             # Note that Pandas does have an infer_nrows option for
@@ -280,11 +288,27 @@ class Plotfile:
             # Temporary fix: set infer_nrows to 99999, the highest
             # theoretical length of plot.
 
-            df = pd.read_fwf(fname,
-                             names=c,
-                             infer_nrows=99999)
+            if not is_dummy:
+                if row == 'all':
+                    df = pd.read_fwf(fname,
+                                     names=c,
+                                     infer_nrows=99999)
+                else:
+                    from file_read_backwards import FileReadBackwards
 
-            status = 'loaded'
+                    with FileReadBackwards(fname, encoding="utf-8") as frb:
+                        line = frb.readline()
+
+                    line = line.replace('**********', ' nan ').replace('-',' -').replace('E -','E-').split()
+
+                    pairs = dict(zip(c, line))
+                    pairs = {k: [float(v)] for k, v in pairs.items()}
+                    df = pd.DataFrame.from_dict(pairs)
+
+                status = 'loaded'
+            else:
+                df = pd.DataFrame(columns=c)
+                status = 'dummy'
         else:
             df = None
             status = 'skipped'

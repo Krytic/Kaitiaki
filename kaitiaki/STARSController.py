@@ -22,6 +22,18 @@ except ImportError:
     import importlib_resources as pkg_resources
 
 ## Auxilary functions.
+
+def _format_metallicity(Z):
+    if Z in [1e-4, 1e-5]:
+        return {
+            1e-4: 'zem4',
+            1e-5: 'zem5'
+        }[Z]
+    else:
+        Z = str(Z).split('.')[1]
+        Z = 'z' + Z.ljust(3, '0')
+        return Z
+
 def _load_shipped_file(filename: str):
     # kaitiaki.debug('info', f'{filename} requested...')
 
@@ -89,11 +101,37 @@ class STARSController:
         self._run_bs_location = run_bs
         self._datafile = "data"
 
+        self._options = None
+        self._lexicon = None
+
+    def use_lexicon(self, lexicon):
+        lexer = kaitiaki.lexer.Lexer(lexicon)
+
+        options = lexer.fetch_lexicon()
+
+        self._options = options['options']
+        self._lexicon = {k: v for k, v in options.items() if k != 'options'}
+
+        print(self._lexicon)
+
     def update_datafile(self, new_location):
         self._datafile = new_location
 
     def update_run_bs(self, loc):
         self._run_bs_location = loc
+
+    def fetch_datafile(self):
+        return _load_shipped_file(f"../backup_data/data.bak")
+
+    def generate_datafile(self, loc):
+        dfile = self.fetch_datafile()
+        wd = os.getcwd()
+
+        for d in loc.split("/"):
+            os.chdir(d)
+
+        with open(loc, 'w') as f:
+            f.write(dfile)
 
     def shit_location(self, cwd):
         wd = os.getcwd()
@@ -248,7 +286,16 @@ class STARSController:
         timer = time.strftime('%Hh %Mm %Ss', time.gmtime(timeout))
 
         if timeout > 20 * 60:
-            self.output("warning", f"Woah! I've been asked to run {command} with a maximum timeout of {timer} (default is 00h 05m 00s).\nI'm assuming this is right, but double check if you were not expecting this.")
+            from datetime import datetime, timedelta
+            now = datetime.now()
+            delta = timedelta(seconds=timeout)
+
+            TAT = now + delta
+
+            now = now.strftime("%d %b, %H:%M:%S (%p)")
+            TAT = TAT.strftime("%d %b, %H:%M:%S (%p)")
+
+            self.output("warning", f"Woah! I've been asked to run {command} with a maximum timeout of {timer} (default is 00h 05m 00s).\nI'm assuming this is right, but double check if you were not expecting this.\nCurrent time: {now}\nTimeout at: {TAT}")
 
         stdout, stderr, reason = self._custom_subprocess_handler(command, timeout, cwd)
 
@@ -330,29 +377,88 @@ class STARSController:
 
             return stdout, stderr, reason
 
-    def run(self, timeout=5*60, cwd=None):
-        """Runs ./run_bs
-
-        Returns:
-            tuple -- The output from run() above.
-        """
-        wd = os.getcwd()
-
-        if cwd is not None:
-            for d in cwd.split("/"):
-                os.chdir(d)
-
+    def commit_parameters(self):
         with kaitiaki.datafile.DataFileParser(self._datafile) as dfile:
             dfile.backup_if_not_exists()
 
             for param, val in self._params.items():
                 dfile.set(param, val)
 
-        out, err, reason = self.terminal_command(f'{self._run_bs_location}/run_bs', timeout=timeout)
+    def run(self, timeout=5*60, cwd=None):
+        """Runs ./run_bs
 
-        os.chdir(wd)
+        Returns:
+            tuple -- The output from run() above.
+        """
+        if self._options == None:
+            wd = os.getcwd()
 
-        return out, err, reason
+            if cwd is not None:
+                for d in cwd.split("/"):
+                    os.chdir(d)
+
+            self.commit_parameters()
+
+            out, err, reason = self.terminal_command(f'{self._run_bs_location}/run_bs', timeout=timeout)
+
+            os.chdir(wd)
+
+            return out, err, reason
+        else:
+            out_dir = self._options['output_directory']
+            if not os.path.exists(out_dir):
+                self.terminal_command(f"mkdir {out_dir}")
+
+            if 'ZS' in self._lexicon[0].keys():
+                Z = self._lexicon[0]['ZS']
+            else:
+                Z = 0.020
+
+            Z = _format_metallicity(Z)
+
+            data  = _load_shipped_file(f"../backup_data/data.bak")
+
+            with open('data', 'w') as file:
+                file.write(data)
+
+            wd = os.getcwd()
+
+            if cwd is not None:
+                for d in cwd.split("/"):
+                    os.chdir(d)
+
+            if self._options['is_binary']:
+                istar = ['', '2']
+            else:
+                istar = ['']
+
+            # Now begin user iterations
+
+            for i in range(len(self._lexicon.keys())):
+                self.terminal_command(f"mkdir {out_dir}/{i}")
+                this_run = self._lexicon[i]
+
+                self.configure_parameters(this_run)
+                self.commit_parameters()
+
+                out, err, reason = self.terminal_command(f'{self._run_bs_location}/run_bs', timeout=timeout)
+
+                if reason != 'finished':
+                    with open('stderr.debug', 'w') as f:
+                        f.write(err)
+
+                    raise ChildProcessError(f'Iteration {i} didn\'t complete. Reason: {reason}. stderr has been dumped to stderr.debug.')
+
+                files = ['out', 'plot', 'sneplot', 'modout', 'nucmodout']
+
+                for file in files:
+                    for I in istar:
+                        self.terminal_command(f'cp {file}{I} {out_dir}/{i}/{file}{I}')
+
+                for I in istar:
+                    self.modout_to_modin(f'modout{I}', f'modin{I}')
+
+            os.chdir(wd)
 
     def get_last_converged_model(self, file, as_obj=False):
         from file_read_backwards import FileReadBackwards
@@ -656,13 +762,17 @@ class STARSController:
         # - existing datafile
         # - declared new parameters
         # - the STARS default (199)
-        if os.path.exists(self._datafile):
-            with kaitiaki.datafile.DataFileParser(self._datafile) as dfile:
-                nmesh = dfile.get('NM2')
-        elif 'nm2' in self._params.keys():
-            nmesh = self._params['nm2']
-        else:
-            nmesh = 199 # assume default
+        try:
+            with open(modout_location, 'r') as f:
+                nmesh = int(f.readline()[88:94])
+        except:
+            if os.path.exists(self._datafile):
+                with kaitiaki.datafile.DataFileParser(self._datafile) as dfile:
+                    nmesh = dfile.get('NM2')
+            elif 'nm2' in self._params.keys():
+                nmesh = self._params['nm2']
+            else:
+                nmesh = 199 # assume default
 
         lines = nmesh * 2 + 1
 
