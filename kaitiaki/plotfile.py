@@ -2,6 +2,7 @@ from copy import deepcopy
 from decimal import Decimal
 import itertools
 from os import path
+from hoki import load
 
 import pandas as pd
 import numpy as np
@@ -44,11 +45,15 @@ class Plotfile:
     def __init__(self, file,
                        allow_pad_age=True,
                        row='all',
-                       dummy_object=False):
+                       dummy_object=False,
+                       naming_schema='kaitiaki'):
 
         assert row in ['all', 'last'], "row must be all or last"
 
-        self._data, status = self.parse_plotfile(file, row, dummy_object)
+        if 'sneplot' in file:
+            self._data, status = self.parse_sneplotfile(file)
+        else:
+            self._data, status = self.parse_plotfile(file, row, dummy_object, naming_schema)
         self._segment_points = []
 
         if status == 'skipped':
@@ -61,6 +66,9 @@ class Plotfile:
 
     def last(self):
         return self._data.iloc[-1:]
+
+    def zams(self):
+        return self._data.iloc[0]
 
     def __add__(self, other):
         if isinstance(other, Plotfile):
@@ -118,6 +126,30 @@ class Plotfile:
             X = 'age'
             x_label = "Age [yr]"
 
+        if not cores_only:
+            for env in range(1, 13):
+                if distinguish_envelopes:
+                    label = "(semi)conductive envelope"
+                else:
+                    label = "Conductive Envelope"
+
+                lab = None if env < 12 else label
+
+                absolute = not distinguish_envelopes
+
+                self.plot(X, f'Mconv_{env}', alpha=0.1,
+                                             ls='',
+                                             markersize=1,
+                                             marker='.',
+                                             label=lab,
+                                             absolute=absolute,
+                                             ax=ax)
+
+        self.plot(X, 'M', c=TOTAL_MASS_COLOR,
+                          ls='-',
+                          label="Total Mass",
+                          ax=ax)
+
         self.plot(X, 'MH',
                      c=HE_CORE_MASS_COLOR,
                      ls='-',
@@ -130,29 +162,6 @@ class Plotfile:
                      label="CO core mass",
                      ax=ax) # CO Core Mass
 
-        if not cores_only:
-            for env in range(1, 13):
-                if distinguish_envelopes:
-                    label = "(semi)conductive envelope"
-                else:
-                    label = "Conductive Envelope"
-
-                lab = None if env < 12 else label
-
-                absolute = not distinguish_envelopes
-
-                self.plot(X, f'Mconv_{env}', c=ENVELOPE_COLOR,
-                                             ls='',
-                                             marker='.',
-                                             label=lab,
-                                             absolute=absolute,
-                                             ax=ax)
-
-        self.plot(X, 'M', c=TOTAL_MASS_COLOR,
-                          ls='-',
-                          label="Total Mass",
-                          ax=ax)
-
         ZAMS = self.access()['M'].to_numpy()[0]
 
         if annotate:
@@ -164,7 +173,14 @@ class Plotfile:
             ax.legend()
 
 
-    def plot(self, x_axis, y_axis, unlog='neither', age_unit=None, absolute=False, ax=None, **kwargs):
+    def plot(self, x_axis, y_axis,
+                           unlog='neither',
+                           age_unit=None,
+                           absolute=False,
+                           denote_absolute_values=False,
+                           ax=None,
+                           fix_core_masses=True,
+                           **kwargs):
         """Plots the parameter given by x_axis against y_axis.
 
         Arguments:
@@ -186,6 +202,13 @@ class Plotfile:
 
         y_arr = self._data[y_axis].to_numpy()
 
+        if fix_core_masses and y_axis == 'MH':
+            M = self._data['M'].to_numpy()
+            if (y_arr != 0).any():
+                mask = np.where(y_arr != 0)[0][-1]
+                if mask + 1 != len(y_arr):
+                    y_arr[mask:] = M[mask:]
+
         if unlog == 'y':
             y_arr = 10 ** y_arr
         elif unlog == 'x':
@@ -195,9 +218,11 @@ class Plotfile:
             x_arr = 10 ** x_arr
         elif unlog == 'not y':
             y_arr = np.log10(y_arr)
-
-        if absolute:
-            y_arr = np.abs(y_arr)
+        elif unlog == 'not x':
+            x_arr = np.log10(x_arr)
+        elif unlog == 'not both':
+            y_arr = np.log10(y_arr)
+            x_arr = np.log10(x_arr)
 
         if ax is None:
             ax = plt.gca()
@@ -224,16 +249,42 @@ class Plotfile:
                 obj = plt.plot(x, y, **kwargs)
                 objs.append(obj)
         else:
-            x = x_arr
-            y = y_arr
-            objs = [plt.plot(x, y, **kwargs)]
+            if absolute:
+                if denote_absolute_values:
+                    kaitiaki.debug('info', "Denoting absolute values is a WIP and the results should be interpreted with caution.")
+                    y_arr_negative = np.abs(y_arr[y_arr < 0])
+                    y_arr_positive = y_arr[y_arr > 0]
+
+                    x_arr_negative = x_arr[y_arr < 0]
+                    x_arr_positive = x_arr[y_arr > 0]
+
+                    segs = [0]
+                    last_seg = 0
+
+                    if 'ls' in kwargs.keys():
+                        kwargs.pop('ls')
+
+                    plt1 = plt.plot(x_arr_negative, y_arr_negative, ls='solid', **kwargs)
+                    plt2 = plt.plot(x_arr_positive, y_arr_positive, ls='solid', **kwargs)
+
+                    objs = [plt1, plt2]
+                else:
+                    y_arr = np.abs(y_arr)
+
+                    x = x_arr
+                    y = y_arr
+                    objs = [plt.plot(x, y, **kwargs)]
+            else:
+                x = x_arr
+                y = y_arr
+                objs = [plt.plot(x, y, **kwargs)]
 
         return list(itertools.chain.from_iterable(objs))
 
     def pad_age(self, by):
         self._data['age'] += by
 
-    def parse_plotfile(self, fname, row, is_dummy):
+    def parse_plotfile(self, fname, row, is_dummy, naming_schema='kaitiaki'):
         """
         Parses a plotfile.
 
@@ -244,19 +295,36 @@ class Plotfile:
 
         This design decision was made by the maintainers of STARS. We use their
         terminology to be consistent.
+
+        Arguments:
+            fname    {str}  -- the filename of the plot file to be loaded
+            row      {str}  -- the row that is to be loaded (obsolete here, you should specify "all", will be removed in a future version)
+            is_dummy {bool} -- whether the resultant dataframe should be empty or not
+
+        Keyword Arguments:
+            naming_schema {str} -- the naming convention for the dataframe columns to be used. Valid options are 'kaitiaki' for the legacy naming convention or 'hoki' for the new, hoki-compatible one.
+
+        Notes:
+            Refer to https://github.com/Krytic/Kaitiaki/issues/1 for details on the new naming convention decision.
+
         """
-        c = ['N', 'age', 'logR', 'logT', 'logL', 'M', 'MH', 'MHe', 'LH',
-             'LHe', 'LC', 'Mconv_1', 'Mconv_2', 'Mconv_3', 'Mconv_4',
-             'Mconv_5', 'Mconv_6', 'Mconv_7', 'Mconv_8', 'Mconv_9',
-             'Mconv_10', 'Mconv_11', 'Mconv_12', 'MHmax', 'MHemax',
-             'logK', 'dt', 'XHs', 'XHes', 'XCs', 'XNs', 'XOs', 'X3Hes',
-             'R/RL', 'J1', 'PBin', 'rsep', 'Mtot', 'Jorb', 'J1+J2', 'Jtot',
-             'worb', 'w1', 'I1', 'Iorb', 'Mdot', 'Mshell_1', 'Mshell_2',
-             'Mshell_3', 'Mshell_4', 'Mshell_5', 'Mshell_6', 'Mshell_7',
-             'Mshell_8', 'Mshell_9', 'Mshell_10', 'Mshell_11', 'Mshell_12',
-             'Mth_1', 'Mth_2', 'Mth_3', 'Mth_4', 'Mth_5', 'Mth_6', 'Mth_7',
-             'Mth_8', 'Mth_9', 'Mth_10', 'Mth_11', 'Mth_12', 'Mconv_env',
-             'Rconv_env', 'logrho', 'logTc']
+        if naming_schema == 'kaitiaki':
+            c = ['N', 'age', 'logR', 'logT', 'logL', 'M', 'MH', 'MHe', 'LH',
+                 'LHe', 'LC', 'Mconv_1', 'Mconv_2', 'Mconv_3', 'Mconv_4',
+                 'Mconv_5', 'Mconv_6', 'Mconv_7', 'Mconv_8', 'Mconv_9',
+                 'Mconv_10', 'Mconv_11', 'Mconv_12', 'MHmax', 'MHemax',
+                 'logK', 'dt', 'XHs', 'XHes', 'XCs', 'XNs', 'XOs', 'X3Hes',
+                 'R/RL', 'J1', 'PBin', 'rsep', 'Mtot', 'Jorb', 'J1+J2', 'Jtot',
+                 'worb', 'w1', 'I1', 'Iorb', 'Mdot', 'Mshell_1', 'Mshell_2',
+                 'Mshell_3', 'Mshell_4', 'Mshell_5', 'Mshell_6', 'Mshell_7',
+                 'Mshell_8', 'Mshell_9', 'Mshell_10', 'Mshell_11', 'Mshell_12',
+                 'Mth_1', 'Mth_2', 'Mth_3', 'Mth_4', 'Mth_5', 'Mth_6', 'Mth_7',
+                 'Mth_8', 'Mth_9', 'Mth_10', 'Mth_11', 'Mth_12', 'Mconv_env',
+                 'Rconv_env', 'logrho', 'logTc']
+        elif naming_schema == 'hoki':
+            c = ['timestep', 'age', 'log(R)', 'log(T)', 'log(L)', 'M', 'He_core', 'CO_core', 'L_(H)', 'L_(He)', 'L_(C)', 'M_conv1', 'M_conv2', 'M_conv3', 'M_conv4', 'M_conv5', 'M_conv6', 'M_conv7', 'M_conv8', 'M_conv9', 'M_conv10', 'M_conv11', 'M_conv12', "M_(H,max)", 'M_(He,max)', 'log(K)', 'dt', 'X', 'Y', 'C', 'N', 'O', '3He', 'R/RL', 'AM_spin', 'P_bin', 'a', 'MTOT', 'AM_bin'. 'AM_spin_tot', 'AM_tot', 'omega_orb', 'omega_1', 'moment_of_inertia_1', 'moment_of_inertia_orb', 'DM1W',  'M_shell1', 'M_shell2', 'M_shell3', 'M_shell4', 'M_shell5', 'M_shell6', 'M_shell7', 'M_shell8', 'M_shell9', 'M_shell10', 'M_shell11', 'M_shell12', 'M_th1', 'M_th2', 'M_th3', 'M_th4', 'M_th5', 'M_th6', 'M_th7', 'M_th8', 'M_th9', 'M_th10', 'M_th11', 'M_th12', 'M_conv-env', 'R_conv-env', 'log(rho)', 'log(Tc)']
+        else:
+            raise ValueError(f'naming_schema "{naming_schema}"" not supported, use "kaitiaki" or "hoki".')
 
         if path.exists(f'{fname}') or is_dummy:
             # Following is a python implementation of the following
@@ -314,6 +382,14 @@ class Plotfile:
             status = 'skipped'
 
         return df, status
+
+    def parse_sneplotfile(self, fname):
+        if path.exists(f'{fname}'):
+            df =  load.dummy_to_dataframe(fname)
+            df.rename
+
+            return df, 'loaded'
+        return None, 'skipped'
 
 class ClusteredPlotfile:
     def __init__(self, directory, indexes, file_names=['zams', 'model']):
