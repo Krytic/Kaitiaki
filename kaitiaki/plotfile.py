@@ -3,6 +3,7 @@ from decimal import Decimal
 import itertools
 from os import path
 from hoki import load
+from hoki import constants as hoki_constants
 
 import pandas as pd
 import numpy as np
@@ -11,21 +12,12 @@ import matplotlib.pyplot as plt
 import subprocess
 from tqdm import tqdm
 
+import kaitiaki
+
 def get_last_line(self, file):
     from file_read_backwards import FileReadBackwards
 
-    c = ['N', 'age', 'logR', 'logT', 'logL', 'M', 'MH', 'MHe', 'logLH',
-              'logLHe', 'logLC', 'Mconv_1', 'Mconv_2', 'Mconv_3', 'Mconv_4',
-              'Mconv_5', 'Mconv_6', 'Mconv_7', 'Mconv_8', 'Mconv_9',
-              'Mconv_10', 'Mconv_11', 'Mconv_12', 'MHmax', 'MHemax',
-              'logK', 'dt', 'XHs', 'XHes', 'XCs', 'XNs', 'XOs', 'X3Hes',
-              'R/RL', 'J1', 'PBin', 'rsep', 'Mtot', 'Jorb', 'J1+J2', 'Jtot',
-              'worb', 'w1', 'I1', 'Iorb', 'Mdot', 'Mshell_1', 'Mshell_2',
-              'Mshell_3', 'Mshell_4', 'Mshell_5', 'Mshell_6', 'Mshell_7',
-              'Mshell_8', 'Mshell_9', 'Mshell_10', 'Mshell_11', 'Mshell_12',
-              'Mth_1', 'Mth_2', 'Mth_3', 'Mth_4', 'Mth_5', 'Mth_6', 'Mth_7',
-              'Mth_8', 'Mth_9', 'Mth_10', 'Mth_11', 'Mth_12', 'Mconv_env',
-              'Rconv_env', 'logrho', 'logTc']
+    c = kaitiaki.constants.PLOT_FILE_COLUMNS
 
     with FileReadBackwards(file, encoding="utf-8") as frb:
         line = frb.readline()
@@ -41,19 +33,15 @@ def get_last_line(self, file):
         width = spec[i]
         # Continue writing parser.
 
-class Plotfile:
+class plot:
     def __init__(self, file,
                        allow_pad_age=True,
                        row='all',
-                       dummy_object=False,
-                       naming_schema='kaitiaki'):
+                       dummy_object=False):
 
         assert row in ['all', 'last'], "row must be all or last"
 
-        if 'sneplot' in file:
-            self._data, status = self.parse_sneplotfile(file)
-        else:
-            self._data, status = self.parse_plotfile(file, row, dummy_object, naming_schema)
+        self._data, status = self.parse_plotfile(file, row, dummy_object)
         self._segment_points = []
 
         if status == 'skipped':
@@ -73,7 +61,7 @@ class Plotfile:
     def __add__(self, other):
         if isinstance(other, Plotfile):
             if self._allow_pad_age:
-                other.pad_age(self.access()['age'].to_numpy()[-1])
+                other.pad_age(self.get('age').to_numpy()[-1])
 
             # self._segment_points.append(len(self._data))
             # self._data = self._data.append(other._data)
@@ -90,8 +78,12 @@ class Plotfile:
     def access(self):
         return self._data
 
+    def get(self, key, silent=True):
+        values = self._data[key]
+        return values
+
     def hr_diagram(self, ax=None, **kwargs):
-        obj = self.plot('logT', 'logL', ax=ax, **kwargs)
+        obj = self.plot('log(T)', 'log(L)', ax=ax, **kwargs)
         xlim = obj[0].axes.get_xlim()
         if xlim[0] < xlim[1]:
             obj[0].axes.invert_xaxis()
@@ -117,7 +109,7 @@ class Plotfile:
         ENVELOPE_COLOR = 'green'
 
         if x_axis == 'modelnum':
-            X = 'N'
+            X = 'timestep'
             x_label = "Model Number"
         elif x_axis == 'collapsetime':
             X = 'collapsetime'
@@ -137,7 +129,7 @@ class Plotfile:
 
                 absolute = not distinguish_envelopes
 
-                self.plot(X, f'Mconv_{env}', alpha=0.1,
+                self.plot(X, f'M_conv{env}', alpha=0.1,
                                              ls='',
                                              markersize=1,
                                              marker='.',
@@ -150,19 +142,19 @@ class Plotfile:
                           label="Total Mass",
                           ax=ax)
 
-        self.plot(X, 'MH',
+        self.plot(X, 'He_core',
                      c=HE_CORE_MASS_COLOR,
                      ls='-',
                      label="He core mass",
                      ax=ax) # Helium Core Mass
 
-        self.plot(X, 'MHe',
+        self.plot(X, 'CO_core',
                      c=CO_CORE_MASS_COLOR,
                      ls='-',
                      label="CO core mass",
                      ax=ax) # CO Core Mass
 
-        ZAMS = self.access()['M'].to_numpy()[0]
+        ZAMS = self.get('M').to_numpy()[0]
 
         if annotate:
             ax.set_title(rf"$M_{{\rm ZAMS}}={ZAMS}M_\odot$ star")
@@ -192,18 +184,18 @@ class Plotfile:
             obj {list} -- The list of Line2d objects plotted by plt.plot.
         """
         if x_axis == 'collapsetime':
-            age_at_collapse = self.access()['age'].to_numpy()[-1]
+            age_at_collapse = self.get('age').to_numpy()[-1]
             time_until_collapse = age_at_collapse \
-                                  - self.access()['age'].to_numpy()
+                                  - self.get('age').to_numpy()
 
             x_arr = time_until_collapse
         else:
-            x_arr = self._data[x_axis].to_numpy()
+            x_arr = self.get(x_axis).to_numpy()
 
-        y_arr = self._data[y_axis].to_numpy()
+        y_arr = self.get(y_axis).to_numpy()
 
-        if fix_core_masses and y_axis == 'MH':
-            M = self._data['M'].to_numpy()
+        if fix_core_masses and y_axis == 'He_core':
+            M = self.get('M').to_numpy()
             if (y_arr != 0).any():
                 mask = np.where(y_arr != 0)[0][-1]
                 if mask + 1 != len(y_arr):
@@ -284,47 +276,17 @@ class Plotfile:
     def pad_age(self, by):
         self._data['age'] += by
 
-    def parse_plotfile(self, fname, row, is_dummy, naming_schema='kaitiaki'):
+    def parse_plotfile(self, fname, row, is_dummy):
         """
         Parses a plotfile.
-
-        NOTE that MHe is the mass of the He-*exhausted* core. So it is
-        technically the CO core mass.
-        Similarly MH is the H-*exhausted* core! So it is technically the
-        He core mass.
-
-        This design decision was made by the maintainers of STARS. We use their
-        terminology to be consistent.
 
         Arguments:
             fname    {str}  -- the filename of the plot file to be loaded
             row      {str}  -- the row that is to be loaded (obsolete here, you should specify "all", will be removed in a future version)
             is_dummy {bool} -- whether the resultant dataframe should be empty or not
-
-        Keyword Arguments:
-            naming_schema {str} -- the naming convention for the dataframe columns to be used. Valid options are 'kaitiaki' for the legacy naming convention or 'hoki' for the new, hoki-compatible one.
-
-        Notes:
-            Refer to https://github.com/Krytic/Kaitiaki/issues/1 for details on the new naming convention decision.
-
         """
-        if naming_schema == 'kaitiaki':
-            c = ['N', 'age', 'logR', 'logT', 'logL', 'M', 'MH', 'MHe', 'LH',
-                 'LHe', 'LC', 'Mconv_1', 'Mconv_2', 'Mconv_3', 'Mconv_4',
-                 'Mconv_5', 'Mconv_6', 'Mconv_7', 'Mconv_8', 'Mconv_9',
-                 'Mconv_10', 'Mconv_11', 'Mconv_12', 'MHmax', 'MHemax',
-                 'logK', 'dt', 'XHs', 'XHes', 'XCs', 'XNs', 'XOs', 'X3Hes',
-                 'R/RL', 'J1', 'PBin', 'rsep', 'Mtot', 'Jorb', 'J1+J2', 'Jtot',
-                 'worb', 'w1', 'I1', 'Iorb', 'Mdot', 'Mshell_1', 'Mshell_2',
-                 'Mshell_3', 'Mshell_4', 'Mshell_5', 'Mshell_6', 'Mshell_7',
-                 'Mshell_8', 'Mshell_9', 'Mshell_10', 'Mshell_11', 'Mshell_12',
-                 'Mth_1', 'Mth_2', 'Mth_3', 'Mth_4', 'Mth_5', 'Mth_6', 'Mth_7',
-                 'Mth_8', 'Mth_9', 'Mth_10', 'Mth_11', 'Mth_12', 'Mconv_env',
-                 'Rconv_env', 'logrho', 'logTc']
-        elif naming_schema == 'hoki':
-            c = ['timestep', 'age', 'log(R)', 'log(T)', 'log(L)', 'M', 'He_core', 'CO_core', 'L_(H)', 'L_(He)', 'L_(C)', 'M_conv1', 'M_conv2', 'M_conv3', 'M_conv4', 'M_conv5', 'M_conv6', 'M_conv7', 'M_conv8', 'M_conv9', 'M_conv10', 'M_conv11', 'M_conv12', "M_(H,max)", 'M_(He,max)', 'log(K)', 'dt', 'X', 'Y', 'C', 'N', 'O', '3He', 'R/RL', 'AM_spin', 'P_bin', 'a', 'MTOT', 'AM_bin'. 'AM_spin_tot', 'AM_tot', 'omega_orb', 'omega_1', 'moment_of_inertia_1', 'moment_of_inertia_orb', 'DM1W',  'M_shell1', 'M_shell2', 'M_shell3', 'M_shell4', 'M_shell5', 'M_shell6', 'M_shell7', 'M_shell8', 'M_shell9', 'M_shell10', 'M_shell11', 'M_shell12', 'M_th1', 'M_th2', 'M_th3', 'M_th4', 'M_th5', 'M_th6', 'M_th7', 'M_th8', 'M_th9', 'M_th10', 'M_th11', 'M_th12', 'M_conv-env', 'R_conv-env', 'log(rho)', 'log(Tc)']
-        else:
-            raise ValueError(f'naming_schema "{naming_schema}"" not supported, use "kaitiaki" or "hoki".')
+
+        c = kaitiaki.constants.PLOT_FILE_COLUMNS
 
         if path.exists(f'{fname}') or is_dummy:
             # Following is a python implementation of the following
@@ -383,60 +345,5 @@ class Plotfile:
 
         return df, status
 
-    def parse_sneplotfile(self, fname):
-        if path.exists(f'{fname}'):
-            df =  load.dummy_to_dataframe(fname)
-            df.rename
 
-            return df, 'loaded'
-        return None, 'skipped'
-
-class ClusteredPlotfile:
-    def __init__(self, directory, indexes, file_names=['zams', 'model']):
-        self._pfiles = dict()
-
-
-        for idx in indexes:
-            n = 0
-
-            for file in file_names:
-                F = Plotfile(f'{directory}/plot.{file}.{idx}')
-
-                if n == 0:
-                    pfile = F
-                else:
-                    pfile = pfile + F
-
-                n += 1
-
-            self._pfiles[idx] = pfile
-
-        self._vmin = np.amin(indexes)-0.5
-        self._vmax = np.amax(indexes)+0.5
-
-    def plot(self, x_axis, y_axis, cbar_label, cmap='jet', alpha=1):
-        fig = plt.figure()
-
-        norm = matplotlib.colors.Normalize(
-            vmin=self._vmin,
-            vmax=self._vmax)
-
-        # choose a colormap
-        c_m = plt.get_cmap(cmap)
-
-        # create a ScalarMappable and initialize a data structure
-        s_m = matplotlib.cm.ScalarMappable(cmap=c_m, norm=norm)
-        s_m.set_array([])
-
-        for idx, pfile in self._pfiles.items():
-            pfile.plot(x_axis, y_axis,
-                       color=s_m.to_rgba(idx),
-                       alpha=alpha)
-
-        fig.subplots_adjust(right=0.8)
-        # cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
-        cbar = fig.colorbar(s_m)#, ax=fig.gca())
-
-        cbar.set_label(cbar_label)
-
-        return fig
+Plotfile = plot # Backwards compatibility
