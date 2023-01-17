@@ -37,7 +37,7 @@ def _format_metallicity(Z):
 def _load_shipped_file(filename: str):
     # kaitiaki.debug('info', f'{filename} requested...')
 
-    contents = pkgutil.get_data(__name__, filename)
+    contents = pkgutil.get_data(__name__, f"../backup_data/{filename}")
     # kaitiaki.debug('info', f'...fetched...')
     contents = contents.decode("utf-8")
     # kaitiaki.debug('info', f'...decoded.')
@@ -104,6 +104,51 @@ class STARSController:
         self._options = None
         self._lexicon = None
 
+    def blit(self, ZS='z020', directory='.'):
+        # Copy in data, COtable
+        data = self.fetch_datafile()
+        COtables = _load_shipped_file(f'../backup_data/COtables/COtables_{ZS}')
+
+        with open(f'{directory}/data', 'w') as f:
+            f.write(data)
+        with open(f'{directory}/COtables', 'w') as f:
+            f.write(COtables)
+
+        if 'em' not in ZS:
+            Z = '0.' + ZS[1:]
+        else:
+            Z = '1e-' + ZS[-1]
+
+        Z = float(Z)
+
+        self.configure_parameters({'ZS': Z, 'CH': 0.75-2.5*Z})
+
+    def assign_period(self, period,
+                            modin_location='modin',
+                            boost_max_nmodels=True):
+        modins = [modin_location]
+        if 'imode' in self._params.keys() and self._params['imode'] == 2:
+            # Binary evolution mode
+            modins.append(f"{modin_location}2")
+
+        for modin in modins:
+            with open(modin, 'r+') as f:
+                data = f.readlines()
+
+                before_period = data[0][:46]
+                after_period = data[0][60:]
+                period = '{:12.6E}'.format(float(period))
+                string = before_period + '  ' + period + after_period
+
+                data[0] = string
+
+                if boost_max_nmodels:
+                    data[0] = data[0][:94] + " 99999" + data[0][100:]
+
+                f.seek(0)
+                f.writelines(data)
+                f.truncate()
+
     def use_lexicon(self, lexicon):
         lexer = kaitiaki.lexer.Lexer(lexicon)
 
@@ -132,19 +177,6 @@ class STARSController:
 
         with open(loc, 'w') as f:
             f.write(dfile)
-
-    def shit_location(self, cwd):
-        wd = os.getcwd()
-
-        if cwd != None:
-            for d in cwd.split("/"):
-                os.chdir(d)
-
-        resp = self.terminal_command('pwd')[0]
-
-        os.chdir(wd)
-
-        return resp
 
     def output(self, type, message):
         """Outputs a message to stdout, if verbose_output is on. Does
@@ -267,118 +299,15 @@ class STARSController:
             self.terminal_command(f'mkdir {self._output_dir}')
 
     def terminal_command(self, command, timeout=5*60, cwd=None):
-        """Executes a terminal command.
-
-        Has a default timeout period of 5 minutes.
-
-        Arguments:
-            command {string} -- The command to execute.
-
-        Keyword Arguments:
-            timeout {int} -- The time (in seconds) that the command
-            should execute for at most. (default: {5*60})
-
-        Returns:
-            tuple -- A 3-tuple representing (stdout, stderr, reason for termination)
         """
-        cmd = command.split(" ")
+        Included for backwards compatibility.
 
-        timer = time.strftime('%Hh %Mm %Ss', time.gmtime(timeout))
-
-        if timeout > 20 * 60:
-            from datetime import datetime, timedelta
-            now = datetime.now()
-            delta = timedelta(seconds=timeout)
-
-            TAT = now + delta
-
-            now = now.strftime("%d %b, %H:%M:%S (%p)")
-            TAT = TAT.strftime("%d %b, %H:%M:%S (%p)")
-
-            self.output("warning", f"Woah! I've been asked to run {command} with a maximum timeout of {timer} (default is 00h 05m 00s).\nI'm assuming this is right, but double check if you were not expecting this.\nCurrent time: {now}\nTimeout at: {TAT}")
-
-        stdout, stderr, reason = self._custom_subprocess_handler(command, timeout, cwd)
-
-        return stdout, stderr, reason
-
-    def _custom_subprocess_handler(self, command, timeout=5*60, cwd=None):
+        You should use kaitiaki.terminal.execute() instead
         """
-            Okay, this one deserves an explanation.
-
-            I noticed that for jobs that took longer than timeout seconds
-            to run, they wouldn't be killed correctly.
-
-            https://stackoverflow.com/questions/70587181/terminate-child-process-on-subprocess-timeoutexpired/72135833
-
-            So what I ended up finding out is that Python treats subprocesses
-            which spawn groups weirdly. STARS, I suppose, does such
-            a thing. Essentially, the SIGKILL signal gets sent to the
-            subprocess -- *but not the group*. In turn, this means that
-            the subprocesses that do spawn groups don't get killed when
-            a TimeoutException is thrown. So, what follows is a copy
-            of the Python source code, with the group-killer added
-            (see "the magic line!" below).
-
-            &copy; original author. Modified on 06 May 2022 by Sean Richards
-            (@Krytic).
-        """
-        with subprocess.Popen(command.split(" "), preexec_fn=os.setsid, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
-            wd = os.getcwd()
-            try:
-                if cwd is not None:
-                    # Man fuck linux
-                    for d in cwd.split("/"):
-                        os.chdir(d)
-                stdout, stderr = process.communicate(None, timeout=timeout)
-            except subprocess.TimeoutExpired as exc:
-                import signal
-
-                # The magic line!
-                os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-
-                try:
-                    import msvcrt
-                except ModuleNotFoundError:
-                    _mswindows = False
-                else:
-                    _mswindows = True
-
-                if _mswindows:
-                    # Windows accumulates the output in a single blocking
-                    # read() call run on child threads, with the timeout
-                    # being done in a join() on those threads.  communicate()
-                    # _after_ kill() is required to collect that and add it
-                    # to the exception.
-                    exc.stdout, exc.stderr = process.communicate()
-                else:
-                    # POSIX _communicate already populated the output so
-                    # far into the TimeoutExpired exception.
-                    process.wait()
-                reason = 'timeout'
-                stdout, stderr = process.communicate()
-            except:  # Including KeyboardInterrupt, communicate handled that.
-                process.kill()
-                # We don't call process.wait() as .__exit__ does that for us.
-                reason = 'other'
-                stdout, stderr = process.communicate()
-                raise
-            else:
-                reason = 'finished'
-            finally:
-                os.chdir(wd)
-
-            try:
-                return stdout.decode('utf-8').strip(), stderr.decode('utf-8').strip(), reason
-            except AttributeError:
-                try:
-                    return stdout.strip(), stderr.strip(), reason
-                except AttributeError:
-                    return stdout, stderr, reason
-
-            return stdout, stderr, reason
+        return kaitiaki.terminal.execute(command, timeout, cwd)
 
     def commit_parameters(self):
-        with kaitiaki.datafile.DataFileParser(self._datafile) as dfile:
+        with kaitiaki.file.data(self._datafile) as dfile:
             dfile.backup_if_not_exists()
 
             for param, val in self._params.items():
@@ -484,7 +413,7 @@ class STARSController:
         if not as_obj:
             return modelblock
 
-        return kaitiaki.out.ModelSummary(modelblock)
+        return kaitiaki.file.outfile.ModelSummary(modelblock)
 
     def get_outfile_models(self, file: str):
         models = []
@@ -555,7 +484,7 @@ class STARSController:
                     # self._datafile = f"{directory}/data"
 
                 # we also need to modify the data file.
-                with kaitiaki.datafile.DataFileParser(f"{directory}/data") as dfile:
+                with kaitiaki.file.data(f"{directory}/data") as dfile:
                     for param, val in params.items():
                         dfile.set(param, val)
                     self._params = dict()
@@ -670,7 +599,7 @@ class STARSController:
 
         self.output('info', f'Prepared the new modin')
 
-        with kaitiaki.datafile.DataFileParser(self._datafile) as dfile:
+        with kaitiaki.file.data(self._datafile) as dfile:
             dfile.backup_if_not_exists()
 
         for file in ['modout', 'out', 'plot']:
@@ -767,7 +696,7 @@ class STARSController:
                 nmesh = int(f.readline()[88:94])
         except:
             if os.path.exists(self._datafile):
-                with kaitiaki.datafile.DataFileParser(self._datafile) as dfile:
+                with kaitiaki.file.data(self._datafile) as dfile:
                     nmesh = dfile.get('NM2')
             elif 'nm2' in self._params.keys():
                 nmesh = self._params['nm2']

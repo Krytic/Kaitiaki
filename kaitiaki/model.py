@@ -91,6 +91,9 @@ class ModelFile:
 
         amin, amax = self.get_bounds(parameter)
 
+        fig.gca().set_xlim(amin, amax)
+        fig.gca().set_ylim(amin, amax)
+
         def _init():
             pass
         def _animate(i):

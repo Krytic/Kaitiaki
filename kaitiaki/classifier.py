@@ -2,7 +2,32 @@ import numpy as np
 
 import kaitiaki
 import tabulate
-import takahe
+
+@np.vectorize
+def compute_separation(P, M, m):
+    """Computes the separation of a BSS
+
+    Uses Kepler's third law to compute the separation, in days.
+
+    Decorators:
+        np.vectorize
+
+    Arguments:
+        P {float} -- The period of the binary star (in days)
+        M {float} -- The mass of the primary star (in solar masses)
+        m {float} -- The mass of the secondary star (in solar masses)
+
+    Returns:
+        {float} -- The orbital separation in Solar Radii
+    """
+
+    G = 6.67430e-11
+    SOLAR_RADIUS      = 696340000
+    SOLAR_MASS        = 1.989e30
+
+    a = ((P * 60 * 60 * 24)**2 * (G * (M+m) * SOLAR_MASS) / (4 * np.pi **2))**(1/3) / SOLAR_RADIUS
+
+    return a
 
 ## TODO: This is slow as hell!
 
@@ -59,9 +84,7 @@ def go(outfile_loc: str='out',
     BINARY_MASS = out.get('Mb')
     BINARY_PERIOD = out.get('P')
 
-    sep = takahe.helpers.compute_separation(BINARY_PERIOD,
-                                            MASS,
-                                            BINARY_MASS - MASS)
+    sep = compute_separation(BINARY_PERIOD, MASS, BINARY_MASS - MASS)
 
     exclude = ['as_string', 'explain', 'STARS', 'out', 'plot', 'exclude', 'LHE']
     explainer = {k: v for k, v in locals().items() if k not in exclude}

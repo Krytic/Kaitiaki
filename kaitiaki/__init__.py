@@ -21,16 +21,18 @@ Here be wizard.
 
 import pkgutil
 
-import kaitiaki.DataFileParser as datafile
-import kaitiaki.plotfile as plotfile
 import kaitiaki.STARSController as STARS
 import kaitiaki.GridMaker as gridmaker
 import kaitiaki.helpers as helpers
 import kaitiaki.constants as constants
-import kaitiaki.outfile as out
 import kaitiaki.classifier as classify
 import kaitiaki.model as model
 import kaitiaki.OptionLexer as lexer
+import kaitiaki.kicks as kicks
+
+import kaitiaki.terminal as terminal
+import kaitiaki.file as file
+import kaitiaki.file_handlers as _filehandler
 
 import glisten
 
@@ -38,7 +40,7 @@ from kaitiaki._metadata import __version__
 
 DEBUG_MODE = False
 
-log = glisten.log.Logger('.log')
+log = glisten.log.Logger('~/.kaitiaki-log', line_length_break=72*3)
 
 def debug(msgtype, message, fatal=False):
     """General purpose debug message handler
@@ -65,6 +67,9 @@ def debug(msgtype, message, fatal=False):
         log.warn(message)
     elif msgtype == 'error':
         log.error(message)
+
+def deprecate(func):
+    return log.deprecate(func)
 
 def run(lexer):
     STARS = kaitiaki.STARS.STARSController()

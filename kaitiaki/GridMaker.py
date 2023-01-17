@@ -16,6 +16,17 @@ from tqdm import tqdm
 
 import kaitiaki
 
+def _load_shipped_file(filename: str):
+    # kaitiaki.debug('info', f'{filename} requested...')
+
+    contents = pkgutil.get_data(__name__, filename)
+    # kaitiaki.debug('info', f'...fetched...')
+    contents = contents.decode("utf-8")
+    # kaitiaki.debug('info', f'...decoded.')
+
+    return contents
+
+
 def _allocate_cores(reserve_core: bool):
     offset = 0
 
@@ -286,7 +297,7 @@ Masses: {self._masses}"""
                 # Anyway, suppose we set NM2 to 199 when it should be
                 # 499. The user can override it by editing the
                 # datafile themselves - e.g. dfile.set("NM2", 499)
-                with kaitiaki.datafile.DataFileParser(f) as dfile:
+                with kaitiaki.file.data(f) as dfile:
                     dfile.set('NM2', 199)
                     dfile.set('IML1', 9)
                     dfile.set('RML', float(mass))
@@ -504,7 +515,6 @@ Masses: {self._masses}"""
         ZS = "0." + target_metallicity[1:]
         CH = 0.75 - 2.5 * float(ZS)
 
-
         if COTable_location == None:
             try:
                 # Attempt to read in a kaitiaki internal file
@@ -539,7 +549,7 @@ Masses: {self._masses}"""
 
         # write it to file.
         # with open(f"dat/COtables", "w") as f:
-            # f.write(cotables)
+        #     f.write(cotables)
 
         size = len(self._masses)
 
@@ -566,7 +576,7 @@ Masses: {self._masses}"""
             except AttributeError:
                 raise Exception("dirname not declared.")
             except distutils.errors.DistutilsFileError as err:
-                kaitiaki.debug("error", err)
+                kaitiaki.debug("error", str(err))
                 continue
 
             if self.masses_logged: mass = round(10**mass, 2)
@@ -579,10 +589,28 @@ Masses: {self._masses}"""
 
             datadir = f"{directory}/data"
 
-            with kaitiaki.datafile.DataFileParser(datadir) as dfile:
+            with open(f"{directory}/COtables", "w") as f:
+                f.write(cotables)
+
+            if not path.exists(datadir):
+                data = pkgutil.get_data(__name__, f"../backup_data/data.bak")
+                data = data.decode("utf-8")
+
+                with open(f"{directory}/data", "w") as f:
+                    f.write(data)
+
+            with kaitiaki.file.data(datadir) as dfile:
                 dfile.set('NCH', 3)
                 dfile.set('ZS', ZS)
                 dfile.set('CH', CH)
+                dfile.set('ISTART', '1')
+                dfile.set('IX', '1')
+                dfile.set('IY', '1')
+                dfile.set('IZ', '1')
+                dfile.set('ITH', '0')
+                dfile.set('IML1', '9')
+                dfile.set('RML', mass)
+                dfile.set('ISTART', '1')
 
             update = lambda *a: pbar.update()
             out = pool.apply_async(_worker_metal_evo,
