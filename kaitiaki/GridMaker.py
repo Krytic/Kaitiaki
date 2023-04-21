@@ -16,17 +16,6 @@ from tqdm import tqdm
 
 import kaitiaki
 
-def _load_shipped_file(filename: str):
-    # kaitiaki.debug('info', f'{filename} requested...')
-
-    contents = pkgutil.get_data(__name__, filename)
-    # kaitiaki.debug('info', f'...fetched...')
-    contents = contents.decode("utf-8")
-    # kaitiaki.debug('info', f'...decoded.')
-
-    return contents
-
-
 def _allocate_cores(reserve_core: bool):
     offset = 0
 
@@ -217,6 +206,7 @@ Masses: {self._masses}"""
                 IZ:      0
                 ISTART:  0
                 ZS:      <the grid metallicity>
+
             If any of these are wrong, you must edit the datafile
             yourself afterwards.
         """
@@ -366,8 +356,7 @@ Masses: {self._masses}"""
             list -- a list corresponding to the outputs. Each element is
                     a 2-tuple, containing (mass, response), where
                     response is the output of a call to
-                    STARSController.terminal_command, i.e., a 3-tuple:
-                        stdout, stderr, reason
+                    STARSController.terminal_command, i.e., a 3-tuple: stdout, stderr, reason
         """
 
         cpu = _allocate_cores(reserve_core)
@@ -441,8 +430,7 @@ Masses: {self._masses}"""
             list -- a list corresponding to the outputs. Each element is
                     a 2-tuple, containing (mass, response), where
                     response is the output of a call to
-                    STARSController.terminal_command, i.e., a 3-tuple:
-                        stdout, stderr, reason
+                    STARSController.terminal_command, i.e., a 3-tuple: stdout, stderr, reason
         """
 
         cpu = _allocate_cores(reserve_core)
