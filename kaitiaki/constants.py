@@ -190,8 +190,9 @@ dfile_struct =  {'nm2':       (0,0,4),      'icl':       (1,0,4),
                  'sgthfac':   (20,34,None),
 
                  'istart':    (21,0,2),     'hkh':       (21,2,11),
-                 'gff':       (21,11,19),   'nnmod':     (21,19,23),
-                 'cepr':      (21,23,None)
+                 'gff':       (21,11,19),   'nnmod':     (21,19,None),
+
+                 'cepr':      (22,0,2),     'alphace':   (22,2,None)
                 }
 
 PLOT_FILE_COLUMNS = ['timestep', 'age', 'log(R)', 'log(T)', 'log(L)', 'M', 'He_core', 'CO_core', 'L_(H)', 'L_(He)', 'L_(C)', 'M_conv1', 'M_conv2', 'M_conv3', 'M_conv4', 'M_conv5', 'M_conv6', 'M_conv7', 'M_conv8', 'M_conv9', 'M_conv10', 'M_conv11', 'M_conv12', "M_(H,max)", 'M_(He,max)', 'log(K)', 'dt', 'X', 'Y', 'C', 'N', 'O', '3He', 'R/RL', 'AM_spin', 'P_bin', 'a', 'MTOT', 'AM_bin', 'AM_spin_tot', 'AM_tot', 'omega_orb', 'omega_1', 'moment_of_inertia_1', 'moment_of_inertia_orb', 'DM1W',  'M_shell1', 'M_shell2', 'M_shell3', 'M_shell4', 'M_shell5', 'M_shell6', 'M_shell7', 'M_shell8', 'M_shell9', 'M_shell10', 'M_shell11', 'M_shell12', 'M_th1', 'M_th2', 'M_th3', 'M_th4', 'M_th5', 'M_th6', 'M_th7', 'M_th8', 'M_th9', 'M_th10', 'M_th11', 'M_th12', 'M_conv-env', 'R_conv-env', 'log(rho)', 'log(Tc)']

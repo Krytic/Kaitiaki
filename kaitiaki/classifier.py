@@ -1,7 +1,10 @@
+import os
+
 import numpy as np
+import matplotlib.pyplot as plt
+import tabulate
 
 import kaitiaki
-import tabulate
 
 @np.vectorize
 def compute_separation(P, M, m):
@@ -29,41 +32,163 @@ def compute_separation(P, M, m):
 
     return a
 
-## TODO: This is slow as hell!
+def diagnosis_plot(files_loc='.', time_axis='age', fname=None, fext='', temp=None, lum=None):
+    """Generates a diagnosis plot for a model.
 
-def go(outfile_loc: str='out',
-       plotfile_loc: str='plot',
-       as_string: bool=False,
-       explain: bool=False,
-       has_he_flash: bool=False):
+    This is a 3x3 plot, with the following axes (left to right, top to bottom):
+        - Mass
+        - Kippenhahn Diagram (Star 1)
+        - log(L)
+
+        - Radius
+        - HR Diagram
+        - log(T)
+
+        - Helium Luminosity
+        - Kippenhahn Diagram (Star 2) OR Chemical Composition Plot (Star 1)
+        - Mass Loss Rate
+
+    The secondary, if it exists, is shown in dashed lines. If the secondary does not exist, the Kippenhahn for Star 2 will instead be the Chemical Composition Plot for Star 1.
+
+    Args:
+        files_loc (str): the location of the files to load (default: `'.'`)
+        time_axis (str): whether the x-axis should be age or timestep (default: `'age'`)
+        fname (str): The filename to save the figure as. If None, no figure is saved. (default: `None`)
+        fext (str): The file extension of the files to be plotted, with no leading period (e.g. 'bak' for 'plot.bak'). If an empty string is passed, it is assumed the files have no extension. (default: '')
     """
-    Classifies a model according to the modelcheck criteria used by Jan.
 
-    Interpretation:
-        result[0] == category
-        result[1] == confidence level bounded between 0 and 1.
-                     LOWER is better.
+    # time_axis should accept modelnum not timestep -- or the kippenhahn
+    # plotter should change.
+    assert time_axis in ['age', 'timestep'], ("time_axis must be "
+                                              "age/timestep, not "
+                                             f"{time_axis}")
+
+    if fext != '':
+        fext = f'.{fext}'
+
+    # Utility function to share X axis between plots after creation.
+    def conjoin_axes(*ax):
+        ax = ax[0]
+        ax[0].get_shared_x_axes().join(ax[0], *ax)
+        for axi in ax[:-1]: axi.set_xticklabels([])
+
+    fig, axes = plt.subplots(3,3,figsize=(15,15))
+
+    period_axis = axes[1,0].twinx()
+
+    conjoin_axes(axes[:,0])
+    conjoin_axes(axes[:,2])
+
+    ls = {'': '-', '2': '--'}
+
+    if os.path.exists(f"{files_loc}/plot2{fext}"):
+        stars = ['', '2']
+        secondary_exists = True
+    else:
+        stars = ['']
+        secondary_exists = False
+
+    for itr, star in enumerate(stars):
+        pf = kaitiaki.file.plot(f'{files_loc}/plot{star}{fext}')
+
+        # Column 1
+        pf.plot(time_axis, 'M', ax=axes[0,0], ls=ls[star])
+
+        pf.plot(time_axis, 'log(R)',
+                           transform=kaitiaki.utils.transforms.unlog_y,
+                           ax=axes[1,0],
+                           ls=ls[star])
+
+        pf.plot(time_axis, 'L_(He)', ax=axes[2,0], ls=ls[star])
+
+        pf.plot(time_axis, 'P_bin', ax=period_axis, ls='dotted', c='magenta')
+
+        pf.plot(time_axis, 'a', ax=axes[1,0], ls='--', c='k')
+
+        # Column 2
+        axis = 'modelnum' if time_axis == 'timestep' else time_axis
+        if time_axis == 'age': axis = 'collapsetime'
+
+        ax = {'': axes[0,1], '2': axes[2,1]}
+        pf.kippenhahn_diagram(ax=ax[star], x_axis=axis, legend=False)
+        pf.hr_diagram(ax=axes[1,1], ls=ls[star])
+
+        if temp != None:
+            axes[1,1].errorbar(temp[itr].n, lum[itr].n, xerr=temp[itr].s, yerr=lum[itr].s)
+
+        if not secondary_exists:
+            cs = 'rgbkm'
+
+            for i, species in enumerate('XYCNO'):
+                pf.plot(time_axis, species,
+                                   ax=axes[2,1],
+                                   c=cs[i],
+                                   label=species)
+
+            axes[2,1].legend()
+
+        # Column 3
+        pf.plot(time_axis, 'log(L)', ax=axes[0,2], ls=ls[star])
+        pf.plot(time_axis, 'log(T)', ax=axes[1,2], ls=ls[star])
+        pf.plot(time_axis, 'DM1W', ax=axes[2,2], ls=ls[star])
+
+        axes[0,0].set_title("mass")
+        axes[1,0].set_title("radius")
+        axes[2,0].set_title("Helium luminosity")
+
+        axes[0,2].set_title('log(L)')
+        axes[1,2].set_title('log(T)')
+        axes[2,2].set_title('mass loss rate')
+
+    if fname is not None:
+        if fname.split(".")[-1] != 'png':
+            fname = fname + '.png'
+        plt.savefig(fname, dpi=600, facecolor='white', bbox_inches='tight')
+
+    explainer1, plausible_outcomes1, outcome1 = go(f'{files_loc}/out',
+                                                   f'{files_loc}/plot',
+                                                   detailed_return=True)
+
+    explainer2, plausible_outcomes2, outcome2 = go(f'{files_loc}/out2',
+                                                   f'{files_loc}/plot2',
+                                                   detailed_return=True)
+
+    dual_explain((explainer1, plausible_outcomes1, outcome1),
+                 (explainer2, plausible_outcomes2, outcome2))
+
+def go(outfile_loc: str='out', plotfile_loc: str='plot', as_string: bool=False, explain: bool=False, detailed_return: bool=False, has_he_flash: bool=False):
+    """Classifies a model according to the modelcheck criteria used by Jan.
+
+    Performs a rudimentary classification based on manually inspected values. It is my wish to replace this one day with a CNN.
+
+    Args:
+        outfile_loc (str): The outfile to load. (default: `'out'`)
+        plotfile_loc (str): The plotfile to load (default: `'plot'`)
+        as_string (bool): Whether to return the result as a string like 'Too Old' or the numeric code like 8.0 (default: `False`)
+        explain (bool): Whether to use kaitiaki's debugger to print out an explanation as to how the result was obtained. (default: `False`)
+        detailed_return (bool): If True, instead of returning anything else, this will return all the arguments that can be passed to :code:`explain`. Note that this is a more complicated way of going explain=True, and is only really useful to the :code:`dual_explain()` function. (default: `False`)
+        has_he_flash (bool): Whether or not the model has a helium flash you want it to consider. (default: `False`)
+
+    Returns:
+        mixed: If :code:`detailed_return` is True, a 3-tuple containing the arguments to :code:`explain()`. Else, if :code:`as_string` is True, the string representing the classification (e.g. "SNe" or "White Dwarf"). Else, the numeric code representing the result -- the whole part being the type (e.g. 1 is SNe) and the decimal part being the confidence, where a LOWER confidence is better. e.g. 1.1 means SNe with a better confidence than 1.3.
     """
-
-    STARS = kaitiaki.STARS.STARSController()
 
     if has_he_flash and not outfile_loc.endswith('.posthf'):
         outfile_loc = outfile_loc + ".posthf"
 
-    out = STARS.get_last_converged_model(outfile_loc, as_obj=True)
+    out = kaitiaki.file.out(outfile_loc)
 
-    plot = kaitiaki.plotfile.Plotfile(plotfile_loc)
+    out = out.last()
 
-    """
-    Fetch the necessary variables.
-    TBD_* means I need to implement this (probably from plotfile)
-    """
+    plot = kaitiaki.file.plot(plotfile_loc)
+
+    # Fetch the necessary variables.
 
     MAXIMUM_TEMP = out.get('temp', 'Tmax')
     MASS = out.get('mass')
     AGE = out.get('age')
-    RADIUS = 10e0**plot.access()['logR'].to_numpy()[-1]
-    LHE = plot.access()['LHe'].to_numpy()
+    RADIUS = 10e0**plot.access()['log(R)'].to_numpy()[-1]
+    LHE = plot.access()['L_(He)'].to_numpy()
 
     MODEL_NUM = out.get('modelnum')
 
@@ -86,7 +211,7 @@ def go(outfile_loc: str='out',
 
     sep = compute_separation(BINARY_PERIOD, MASS, BINARY_MASS - MASS)
 
-    exclude = ['as_string', 'explain', 'STARS', 'out', 'plot', 'exclude', 'LHE']
+    exclude = ['as_string', 'explain', 'out', 'plot', 'exclude', 'LHE', 'detailed_return']
     explainer = {k: v for k, v in locals().items() if k not in exclude}
 
     plausible_outcomes = [0.0]
@@ -256,6 +381,9 @@ def go(outfile_loc: str='out',
     if explain:
         explain_result(explainer, plausible_outcomes, outcome)
 
+    if detailed_return:
+        return explainer, plausible_outcomes, outcome
+
     if as_string: outcome = to_str(outcome)
     return outcome
 
@@ -291,7 +419,7 @@ def strings():
         9.0: "Thermally Pulsing"
     }
 
-def explain_result(explainer, plausible_outcomes, outcome):
+def explain_result(explainer, plausible_outcomes, outcome, speak=True):
     max_line_length = 78
 
     header = ["" for _ in range(4)]
@@ -342,6 +470,36 @@ I classify as {outcome} ({to_str(outcome)})"""
                 continue
             multiple_outstr += f"    {i+1-subtr}. {oc} ({to_str(oc)})\n"
 
-    kaitiaki.debug('info', outstr)
-    if multiple_outstr != "":
-        kaitiaki.debug('warning', multiple_outstr.rstrip())
+    if speak:
+        kaitiaki.debug('info', outstr)
+        if multiple_outstr != "":
+            kaitiaki.debug('warning', multiple_outstr.rstrip())
+    else:
+        return outstr, multiple_outstr.rstrip()
+
+def dual_explain(obj1, obj2):
+    outstr1, multiple_outstr1 = explain_result(*obj1, speak=False)
+    outstr2, multiple_outstr2 = explain_result(*obj2, speak=False)
+
+    dual_outstr = []
+
+    outstr2 = outstr2.split("\n")
+    outstr1 = outstr1.split("\n")
+
+    while len(outstr2) < len(outstr1):
+        outstr2.append("")
+
+    while len(outstr1) < len(outstr2):
+        outstr1.append("")
+
+    for i, line in enumerate(outstr1):
+        dual_outstr.append(f"{line.rstrip().ljust(78)} | {outstr2[i].rstrip().ljust(78)}")
+
+    dual_outstr = "\n".join(dual_outstr)
+    kaitiaki.debug('info', dual_outstr)
+
+    if multiple_outstr1 != "":
+        kaitiaki.debug('warning', "Star 1:\n" + multiple_outstr1)
+
+    if multiple_outstr2 != "":
+        kaitiaki.debug('warning', "Star 2:\n" + multiple_outstr2)

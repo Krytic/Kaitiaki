@@ -4,7 +4,7 @@ import subprocess
 
 import kaitiaki
 
-def execute(command, timeout=5*60, cwd=None):
+def execute(command, timeout=5*60, cwd=None, warn=True):
     """Executes a terminal command.
 
     Has a default timeout period of 5 minutes.
@@ -33,7 +33,8 @@ def execute(command, timeout=5*60, cwd=None):
         now = now.strftime("%d %b, %H:%M:%S (%p)")
         TAT = TAT.strftime("%d %b, %H:%M:%S (%p)")
 
-        kaitiaki.debug("warning", f"Woah! I've been asked to run {command} with a maximum timeout of {timer} (default is 00h 05m 00s).\nI'm assuming this is right, but double check if you were not expecting this.\nCurrent time: {now}\nTimeout at: {TAT}")
+        if warn:
+            kaitiaki.debug("warning", f"Woah! I've been asked to run {command} with a maximum timeout of {timer} (default is 00h 05m 00s).\nI'm assuming this is right, but double check if you were not expecting this.\nCurrent time: {now}\nTimeout at: {TAT}")
 
     stdout, stderr, reason = _custom_subprocess_handler(command, timeout, cwd)
 
