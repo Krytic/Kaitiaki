@@ -40,7 +40,7 @@ class ModelSummary:
 
         for lineno in range(1, 8):
             line = model[lineno]
-            line = line.replace('**********', ' nan ').replace('-',' -').replace('E -','E-').split()
+            line = line.replace('**********', ' nan ').replace('-',' -').replace('********', ' nan ').replace('E -','E-').split()
 
             lines.append(line)
 
@@ -207,6 +207,14 @@ class outfile:
     def get_by_modelnum(self, modelnum):
         return self._models[modelnum]
 
+    def get(self, param, at=None):
+        ret = np.array([])
+
+        for model in self:
+            ret = np.append(ret, model.get(param, at))
+
+        return ret
+
     def __iter__(self):
         self.__counter = 0
         return self
@@ -222,4 +230,5 @@ class outfile:
         return self.__size
 
     def last(self):
-        return self._models[-1][1]
+        key = max(self._models.keys())
+        return self._models[key]

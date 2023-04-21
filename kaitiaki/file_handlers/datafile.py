@@ -18,10 +18,17 @@ class DataFileParser:
         >>> with DataFileParser('data') as dfile:
         >>>    ...
 
+        If not used as a context manager, only the get() method is
+        available.
+
         Keyword Arguments:
             file_pointer {str} -- The location of the datafile (default: {'data'})
         """
         self._file = file_pointer
+
+    def get(self, param):
+        with self as df:
+            return df.get(param)
 
     def __enter__(self):
         class Parser():
@@ -64,6 +71,8 @@ class DataFileParser:
                     return 2
                 if idx[0] == 15 and param not in ['ct10', 'ct9', 'ct8']:
                     return 2
+                if param == 'alphace':
+                    return 1
 
                 return 0
 
@@ -102,6 +111,14 @@ class DataFileParser:
                     return lookup_table[param]
                 else:
                     raise KeyError(f"Parameter {param} not recognised.")
+
+            def elucidate(self, file, elucidate_only=None):
+                with open(file, 'w') as f:
+                    if elucidate_only == None:
+                        elucidate_only = kaitiaki.constants.dfile_struct.keys()
+
+                    lines = [f"[{key.upper()}]: {self.get(key)}\n" for key in elucidate_only]
+                    f.writelines(lines)
 
             def _write_to_pointer(self, pointer, data, mode):
                 if mode == 'replace':
@@ -162,7 +179,6 @@ class DataFileParser:
 
                 if num_dp > 0:
                     return float(val)
-
                 return int(val)
 
             def restore_backup(self):

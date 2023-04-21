@@ -128,8 +128,7 @@ class plot:
 
                 transform = lambda axis,array: np.abs(array) if axis=='y' and not distinguish_envelopes else array
 
-                self.plot(X, f'M_conv{env}', alpha=0.1,
-                                             ls='',
+                self.plot(X, f'M_conv{env}', ls='',
                                              markersize=1,
                                              marker='.',
                                              label=lab,
