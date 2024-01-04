@@ -40,7 +40,10 @@ setup(name='kaitiaki',
                         'file_read_backwards',
                         'uncertainties',
                         'tqdm',
-                        'glisten'
+                        'glisten',
+                        'tabulate',
+                        'scipy',
+                        'colorama'
                         ],
       python_version='>=3.11'
       )
