@@ -30,11 +30,6 @@ import kaitiaki.OptionLexer as lexer
 import kaitiaki.kicks as kicks
 import kaitiaki.sntools as sntools
 
-# Deprecated
-import kaitiaki.GridMaker as gridmaker
-import kaitiaki.model as model
-import kaitiaki.quality as quality
-
 # Augments
 import kaitiaki.augments as augments
 
@@ -120,14 +115,15 @@ def debug(msgtype, message, fatal=False):
                        'info',
                        'status'], assert_err
 
-    if msgtype == 'info':
-        log.info(message)
-    elif msgtype == 'status':
-        log.status(message)
-    elif msgtype == 'warning':
-        log.warn(message)
-    elif msgtype == 'error':
-        log.error(message)
+    match msgtype:
+        case 'info':
+            log.info(message)
+        case 'status':
+            log.status(message)
+        case 'warning':
+            log.warn(message)
+        case 'error':
+            log.error(message)
 
 
 def deprecate(func):

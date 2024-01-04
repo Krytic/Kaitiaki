@@ -111,15 +111,16 @@ class plot:
         CO_CORE_MASS_COLOR = 'crimson'
         ENVELOPE_COLOR = 'green'
 
-        if x_axis == 'modelnum':
-            X = 'timestep'
-            x_label = "Model Number"
-        elif x_axis == 'collapsetime':
-            X = 'collapsetime'
-            x_label = "Time until collapse [yr]"
-        elif x_axis == 'age':
-            X = 'age'
-            x_label = "Age [yr]"
+        match x_axis:
+            case 'modelnum':
+                X = 'timestep'
+                x_label = "Model Number"
+            case 'collapsetime':
+                X = 'collapsetime'
+                x_label = "Time until collapse [yr]"
+            case 'age':
+                X = 'age'
+                x_label = "Age [yr]"
 
         if not cores_only:
             for env in range(1, 13):

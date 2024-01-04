@@ -19,22 +19,35 @@ from tqdm import tqdm
 
 import kaitiaki
 
-try:
-    import importlib.resources as pkg_resources
-except ImportError:
-    # Try backported to PY<37 `importlib_resources`.
-    import importlib_resources as pkg_resources
+import importlib.resources as pkg_resources
 
-## Auxilary functions.
+# Auxilary functions.
+
 
 class ServerError(Exception):
+    """Represents an error from the server
+
+    Syntactic sugar for a server error.
+    """
     def __init__(self, server_code, message):
         self.server_code = server_code
         self.message = message
 
         super().__init__(f'{self.server_code} {self.message}')
 
+
 def install(install_path):
+    """Installs STARS
+
+    Downloads the latest version of AotearoaSTARS from GitHub.
+
+    Args:
+        install_path (str): The location to install AotearoaSTARS to.
+
+    Raises:
+        FileNotFoundError: If the repository could not be found
+        ServerError: If the HTTP response code is not 200
+    """
     repo = 'UoA-Stars-And-Supernovae/STARS:master'
 
     repo_name = repo.split('/')[1].split(":")[0]
@@ -73,7 +86,21 @@ def install(install_path):
 
     kaitiaki.terminal.execute('make', cwd=install_path)
 
+
 def recompile(install_path):
+    """Recompiles the STARS code
+
+    Recompiles the STARS code. Executes make clean && make to do so.
+
+    Args:
+        install_path (str): The location that the STARS code is installed to
+
+    Returns:
+        tuple: a 2-tuple of 3-tuples representing ((stdout, stderr, termination_reason), (stdout, stderr, termination_reason)) for (make clean, make) respectively.
+
+    Raises:
+        ChildProcessError: If either command fails.
+    """
     o, e, r = kaitiaki.terminal.execute('make clean', cwd=install_path)
 
     if r == 'finished':
@@ -81,8 +108,11 @@ def recompile(install_path):
 
         if r2 == 'finished':
             return ((o, e, r), (o2, e2, r2))
+        else:
+            raise ChildProcessError('make failed.')
+    else:
+        raise ChildProcessError('make clean failed.')
 
-    raise ChildProcessError("make and/or make clean failed.")
 
 def _allocate_cores(reserve_core: bool):
     offset = 0
@@ -96,6 +126,7 @@ def _allocate_cores(reserve_core: bool):
             offset = int(n_cores // 4)
 
     return n_cores - offset
+
 
 def _worker_evolve(directory, timeout, mass, do_he_flash, run_bs, STARS):
     # our paralellised worker function. Shouldn't be necessary
@@ -130,9 +161,10 @@ def _worker_evolve(directory, timeout, mass, do_he_flash, run_bs, STARS):
 
     return out, err, reason
 
+
 class STARSController:
     """Represents an instance of the STARS code."""
-    def __init__(self, verbose_output=True, run_bs="."):
+    def __init__(self, verbose_output: bool = True, run_bs: str = "."):
         """Represents an instance of the STARS code."""
         self._verbose_output = verbose_output
         self._output_dir = "."
