@@ -1,5 +1,6 @@
 import kaitiaki
 
+
 class Range:
     def __init__(self, bound_low, bound_high, inclusivity="[]", mutable=False):
         self._bound_low = bound_low
@@ -32,12 +33,12 @@ class Range:
         if self._left_inclusive:
             part1 = self._bound_low <= item
         else:
-            part1 = self._bound_low <  item
+            part1 = self._bound_low < item
 
         if self._right_inclusive:
             part2 = self._bound_high >= item
         else:
-            part2 = self._bound_high >  item
+            part2 = self._bound_high > item
 
         return (part1 and part2)
 
@@ -47,7 +48,8 @@ class Range:
         elif idx == 1:
             return self._bound_high
 
-        raise ValueError("idx not allowed -- use 0 to access lower bound, or 1 to access upper bound")
+        raise ValueError(("idx not allowed -- use 0 to access lower bound, "
+                          "or 1 to access upper bound"))
 
     def inclusives(self):
         return (self._left_inclusive, self._right_inclusive)
@@ -59,9 +61,13 @@ class Range:
             elif key == 1:
                 self._bound_high = val
             else:
-                raise ValueError("Key was set improperly. Use 0 to modify the lower bound, or 1 to modify the upper bound.")
+                raise ValueError(("Key was set improperly. Use 0 to modify "
+                                  "the lower bound, or 1 to modify the "
+                                  "upper bound."))
         else:
-            raise TypeError("This object was not initialized with mutable methods.")
+            raise TypeError(("This object was not initialized with "
+                             "mutable methods."))
 
     def __str__(self):
-        return f"{self._inclusives[0]}{self[0]}, {self[1]}{self._inclusives[1]}"
+        obj = f"{self._inclusives[0]}{self[0]}, {self[1]}{self._inclusives[1]}"
+        return obj

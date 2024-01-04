@@ -1,8 +1,12 @@
 import kaitiaki
 import numpy as np
 
+
 class QualityControl:
-    def __init__(self, dirname, binary_mode=False, termination_reason='finished'):
+    def __init__(self, dirname,
+                 binary_mode=False,
+                 termination_reason='finished'):
+
         self.binary_mode = binary_mode
         self.dirname = dirname
 

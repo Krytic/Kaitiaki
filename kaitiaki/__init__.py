@@ -23,32 +23,41 @@ import os
 
 import pkg_resources
 
+# Core
 import kaitiaki.STARSController as STARS
-import kaitiaki.GridMaker as gridmaker
 import kaitiaki.helpers as helpers
 import kaitiaki.constants as constants
 import kaitiaki.classifier as classify
-import kaitiaki.model as model
 import kaitiaki.OptionLexer as lexer
 import kaitiaki.kicks as kicks
+import kaitiaki.sntools as sntools
+
+# Deprecated
+import kaitiaki.GridMaker as gridmaker
+import kaitiaki.model as model
 import kaitiaki.quality as quality
 
+# Augments
+import kaitiaki.augments as augments
+
+# Utils
 import kaitiaki.terminal as terminal
 import kaitiaki.file as file
 import kaitiaki.file_handlers as _filehandler
-
 from .utils import transforms
 
 import glisten
 
 from kaitiaki._metadata import __version__
 
+# Sugar
 stars = STARS.STARSController
+
 
 def load_file(filename):
     data_path = pkg_resources.resource_filename('kaitiaki', '../backup_data')
 
-    pathname = os.path.join(data_path, '..' + os.sep + 'backup_data')
+    pathname = os.path.join(data_path, '..', 'backup_data')
     pathname = os.path.normpath(pathname)
 
     if '..' in filename:
@@ -60,7 +69,8 @@ def load_file(filename):
         if filename.startswith(folder):
             break
     else:
-        raise ValueError(f"Folder not valid (allowed: {'/'.join(allowed_folders)})")
+        error = f"Folder not valid (allowed: {'/'.join(allowed_folders)})"
+        raise ValueError(error)
 
     if not os.path.exists(os.path.join(pathname, filename)):
         raise IOError(f"{filename} is not a valid kaitiaki internal file.")
@@ -69,6 +79,7 @@ def load_file(filename):
         file = f.read().decode('utf-8')
 
     return file
+
 
 def format_metallicity(Z):
     if isinstance(Z, float):
@@ -87,7 +98,9 @@ def format_metallicity(Z):
         return Z
     raise ValueError(f"I don't know what {Z} means.")
 
+
 log = glisten.log.Logger('~/.kaitiaki-log', line_length_break=72*3)
+
 
 def debug(msgtype, message, fatal=False):
     """General purpose debug message handler
@@ -102,10 +115,13 @@ def debug(msgtype, message, fatal=False):
 
     """
 
+    assert_err = f"Message type \"{msgtype}\" is not recognised."
+
     assert msgtype in ['warning',
                        'error',
                        'info',
-                       'status'], f"Message type \"{msgtype}\" is not recognised."
+                       'status'], assert_err
+
     if msgtype == 'info':
         log.info(message)
     elif msgtype == 'status':
@@ -115,8 +131,10 @@ def debug(msgtype, message, fatal=False):
     elif msgtype == 'error':
         log.error(message)
 
+
 def deprecate(func):
     return log.deprecate(func)
+
 
 def run(lexer):
     STARS = kaitiaki.STARS.STARSController()

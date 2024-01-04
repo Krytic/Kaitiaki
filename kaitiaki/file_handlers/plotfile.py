@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import subprocess
 from tqdm import tqdm
 
+
 def get_last_line(self, file):
     from file_read_backwards import FileReadBackwards
 
@@ -22,21 +23,23 @@ def get_last_line(self, file):
     with FileReadBackwards(file, encoding="utf-8") as frb:
         line = frb.readline()
 
-    spec = ([6,16]                               # I6, E16.9
-         + [10 for _ in range(24)]               # 24F10.5
-         + [13, 13, 13]                          # 3E13.6
-         + [12 for _ in range(18)]               #18(1X,E12.5)
-         + [9 for _ in range(52)])               # 52F9.5
+    spec = ([6, 16]                               # I6, E16.9
+            + [10 for _ in range(24)]             # 24F10.5
+            + [13, 13, 13]                        # 3E13.6
+            + [12 for _ in range(18)]             # 18(1X,E12.5)
+            + [9 for _ in range(52)])             # 52F9.5
 
     for i, col in enumerate(c):
         width = spec[i]
         # Continue writing parser.
 
+
 class plot:
-    def __init__(self, file='plot',
-                       allow_pad_age=True,
-                       row='all',
-                       dummy_object=False):
+    def __init__(self,
+                 file: str = 'plot',
+                 allow_pad_age: bool = True,
+                 row: str = 'all',
+                 dummy_object: bool = False):
 
         assert row in ['all', 'last'], "row must be all or last"
 
@@ -77,7 +80,7 @@ class plot:
     def access(self):
         return self._data
 
-    def get(self, key, silent=True):
+    def get(self, key):
         values = self._data[key]
         return values
 
@@ -87,13 +90,14 @@ class plot:
         if xlim[0] < xlim[1]:
             obj[0].axes.invert_xaxis()
 
-    def kippenhahn_diagram(self, distinguish_envelopes: bool=False,
-                                 legend: bool=True,
-                                 x_axis: str='modelnum',
-                                 ax=None,
-                                 annotate: bool=True,
-                                 cores_only: bool=False,
-                                 **kwargs):
+    def kippenhahn_diagram(self,
+                           distinguish_envelopes: bool = False,
+                           legend: bool = True,
+                           x_axis: str = 'modelnum',
+                           ax: plt.Axes = None,
+                           annotate: bool = True,
+                           cores_only: bool = False,
+                           **kwargs):
 
         err_msg = "x_axis must be collapsetime, modelnum, or age."
 
@@ -120,38 +124,49 @@ class plot:
         if not cores_only:
             for env in range(1, 13):
                 if distinguish_envelopes:
-                    label = "(semi)conductive envelope"
+                    label = "(semi)convective envelope"
                 else:
-                    label = "Conductive Envelope"
+                    label = "Convective Envelope"
 
                 lab = None if env < 12 else label
 
-                transform = lambda axis,array: np.abs(array) if axis=='y' and not distinguish_envelopes else array
+                if distinguish_envelopes:
+                    transform = kaitiaki.utils.transforms.null
+                else:
+                    transform = kaitiaki.utils.transforms.absval
 
-                self.plot(X, f'M_conv{env}', ls='',
-                                             markersize=1,
-                                             marker='.',
-                                             label=lab,
-                                             transform=transform,
-                                             c=ENVELOPE_COLOR,
-                                             ax=ax)
-
-        self.plot(X, 'M', c=TOTAL_MASS_COLOR,
-                          ls='-',
-                          label="Total Mass",
+                self.plot(X,
+                          f'M_conv{env}',
+                          ls='',
+                          markersize=1,
+                          marker='.',
+                          label=lab,
+                          transform=transform,
+                          c=ENVELOPE_COLOR,
                           ax=ax)
 
-        self.plot(X, 'He_core',
-                     c=HE_CORE_MASS_COLOR,
-                     ls='-',
-                     label="He core mass",
-                     ax=ax) # Helium Core Mass
+        self.plot(X,
+                  'M',
+                  c=TOTAL_MASS_COLOR,
+                  ls='-',
+                  label="Total Mass",
+                  ax=ax)
 
-        self.plot(X, 'CO_core',
-                     c=CO_CORE_MASS_COLOR,
-                     ls='-',
-                     label="CO core mass",
-                     ax=ax) # CO Core Mass
+        # Helium Core Mass
+        self.plot(X,
+                  'He_core',
+                  c=HE_CORE_MASS_COLOR,
+                  ls='-',
+                  label="He core mass",
+                  ax=ax)
+
+        # CO Core Mass
+        self.plot(X,
+                  'CO_core',
+                  c=CO_CORE_MASS_COLOR,
+                  ls='-',
+                  label="CO core mass",
+                  ax=ax)
 
         ZAMS = self.get('M').to_numpy()[0]
 
@@ -163,12 +178,13 @@ class plot:
         if legend:
             ax.legend()
 
-
-    def plot(self, x_axis, y_axis,
-                           transform=None,
-                           ax=None,
-                           fix_core_masses=True,
-                           **kwargs):
+    def plot(self,
+             x_axis: str,
+             y_axis: str,
+             transform=None,
+             ax: plt.Axes = None,
+             fix_core_masses: bool = True,
+             **kwargs):
         """Plots the parameter given by x_axis against y_axis.
 
         Arguments:
@@ -218,8 +234,9 @@ class plot:
         """
         if x_axis == 'collapsetime':
             age_at_collapse = self.get('age').to_numpy()[-1]
-            time_until_collapse = age_at_collapse \
-                                  - self.get('age').to_numpy()
+            current_age = self.get('age').to_numpy()
+
+            time_until_collapse = age_at_collapse - current_age
 
             x_arr = time_until_collapse
         else:
@@ -279,8 +296,11 @@ class plot:
 
         Arguments:
             fname    {str}  -- the filename of the plot file to be loaded
-            row      {str}  -- the row that is to be loaded (obsolete here, you should specify "all", will be removed in a future version)
-            is_dummy {bool} -- whether the resultant dataframe should be empty or not
+            row      {str}  -- the row that is to be loaded
+                               (obsolete here, you should specify "all",
+                               will be removed in a future version)
+            is_dummy {bool} -- whether the resultant dataframe should be
+                               empty or not
         """
 
         c = kaitiaki.constants.PLOT_FILE_COLUMNS
@@ -297,11 +317,11 @@ class plot:
             # where the decimal point sits. For this purpose, however,
             # that is irrelevant.
             # I6,1P,E16.9,0P,24F10.5,1P,3E13.6,18(1X,E12.5),0P,52F9.5
-            spec = ([6,16]                               # I6, E16.9
-                 + [10 for _ in range(24)]               # 24F10.5
-                 + [13, 13, 13]                          # 3E13.6
-                 + [12 for _ in range(18)]               # 18(1X,E12.5)
-                 + [9 for _ in range(52)])               # 52F9.5
+            spec = ([6, 16]                               # I6, E16.9
+                    + [10 for _ in range(24)]            # 24F10.5
+                    + [13, 13, 13]                       # 3E13.6
+                    + [12 for _ in range(18)]            # 18(1X,E12.5)
+                    + [9 for _ in range(52)])            # 52F9.5
             # The spec extends out to ~100 columns to future proof it
             # I think, so we have to truncate it here to the length of
             # what we know is in the file.
@@ -318,15 +338,19 @@ class plot:
                 if row == 'all':
                     df = pd.read_fwf(fname,
                                      names=c,
-                                     infer_nrows=99999,
-                                     colspecs='infer')
+                                     widths=spec
+                                     # infer_nrows=99999,
+                                     )
                 else:
                     from file_read_backwards import FileReadBackwards
 
                     with FileReadBackwards(fname, encoding="utf-8") as frb:
                         line = frb.readline()
 
-                    line = line.replace('**********', ' nan ').replace('-',' -').replace('E -','E-').split()
+                    line = (line.replace('**********', ' nan ')
+                                .replace('-', ' -')
+                                .replace('E -', 'E-')
+                                .split())
 
                     pairs = dict(zip(c, line))
                     pairs = {k: [float(v)] for k, v in pairs.items()}
@@ -341,3 +365,7 @@ class plot:
             status = 'skipped'
 
         return df, status
+
+
+def plot2(file: str = 'plot2', *args, **kwargs):
+    return plot(file, *args, **kwargs)

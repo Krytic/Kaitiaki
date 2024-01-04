@@ -12,7 +12,7 @@ except FileNotFoundError:
 metadata = {"version": "",
             "author": "",
             "email": ""
-           }
+            }
 
 metadata_file = open("kaitiaki/_metadata.py", "rt").read()
 
@@ -25,18 +25,20 @@ for item in metadata.keys():
         metadata[item] = match.group(1)
 
 setup(name='kaitiaki',
-      license           = 'MIT License',
-      version           = metadata['version'],
-      description       = description,
-      long_description  = long_description,
-      author            = metadata['author'],
-      author_email      = metadata['email'],
-      packages          = ['kaitiaki'],
-      zip_safe          = False,
-      homepage          = 'https://github.com/Krytic/kaitiaki',
-      install_requires  = ['numpy',
-                           'matplotlib',
-                           'pandas',
-                           'file_read_backwards'
-                          ]
-    )
+      license='MIT License',
+      version=metadata['version'],
+      description=description,
+      long_description=long_description,
+      author=metadata['author'],
+      author_email=metadata['email'],
+      packages=['kaitiaki'],
+      zip_safe=False,
+      homepage='https://github.com/Krytic/kaitiaki',
+      install_requires=['numpy',
+                        'matplotlib',
+                        'pandas',
+                        'file_read_backwards',
+                        'uncertainties'
+                        ],
+      python_version='>=3.11'
+      )

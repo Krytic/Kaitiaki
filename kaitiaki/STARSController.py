@@ -1,10 +1,14 @@
 from copy import deepcopy
 from decimal import Decimal
+
 import multiprocessing as mp
 import os
 import pkgutil
+import requests
+import shutil
 import time
 import traceback
+import zipfile
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -22,6 +26,63 @@ except ImportError:
     import importlib_resources as pkg_resources
 
 ## Auxilary functions.
+
+class ServerError(Exception):
+    def __init__(self, server_code, message):
+        self.server_code = server_code
+        self.message = message
+
+        super().__init__(f'{self.server_code} {self.message}')
+
+def install(install_path):
+    repo = 'UoA-Stars-And-Supernovae/STARS:master'
+
+    repo_name = repo.split('/')[1].split(":")[0]
+    branch = repo.split('/')[1].split(":")[1]
+
+    url = f'https://github.com/{repo}/archive/refs/heads/{branch}.zip'
+
+    try:
+        response = requests.get(url)
+    except OSError as exc:
+        # Certificate not found
+        raise FileNotFoundError(f"Could not access the {repo} repo") from exc
+        # I dislike it raising an OSError.
+
+    if response.status_code == 200:
+        open(f'{install_path}/{repo_name}.zip', 'wb').write(response.content)
+    else:
+        raise ServerError(response.status_code, response.reason)
+
+    with zipfile.ZipFile(f'{install_path}/{repo_name}.zip', 'r') as zip_ref:
+        zip_ref.extractall()
+
+    source = f"{install_path}/{repo_name}-{branch}"
+
+    files_list = os.listdir(source)
+
+    for files in files_list:
+        shutil.move(f"{source}/{files}", install_path)
+
+    if os.path.realpath(source) != '/':
+        # Look, this should never happen unless the user does
+        # some wack shit, but I'm paranoid.
+        shutil.rmtree(source)
+
+    os.remove(f'{install_path}/{repo_name}.zip')
+
+    kaitiaki.terminal.execute('make', cwd=install_path)
+
+def recompile(install_path):
+    o, e, r = kaitiaki.terminal.execute('make clean', cwd=install_path)
+
+    if r == 'finished':
+        o2, e2, r2 = kaitiaki.terminal.execute('make', cwd=install_path)
+
+        if r2 == 'finished':
+            return ((o, e, r), (o2, e2, r2))
+
+    raise ChildProcessError("make and/or make clean failed.")
 
 def _allocate_cores(reserve_core: bool):
     offset = 0
@@ -131,7 +192,7 @@ class STARSController:
         in_secondary_mode = ('imode' in self._params.keys() and self._params['imode'] == 2)
 
         if in_secondary_mode or forcibly_do_both:
-            # Binary evolution mode
+            # We are in binary evolution mode
             modins.append(f"{modin_location}2")
 
         for modin in modins:
@@ -171,12 +232,26 @@ class STARSController:
     def fetch_datafile(self):
         return kaitiaki.load_file(f"data.bak")
 
-    def load_default_modin(self, directory='.', as_secondary=False, Z='z020'):
+    def load_default_modin(self,
+                           directory='.',
+                           as_secondary=False,
+                           Z='z020',
+                           set_nmodels_to=99999):
+
         dest_file = 'modin'
-        if as_secondary: dest_file = 'modin2'
+
+        if as_secondary:
+            dest_file = 'modin2'
 
         with open(f'{directory}/{dest_file}', 'w') as file:
-            file.write(kaitiaki.load_file(f'modins/modin.bak.{Z}'))
+            modin = kaitiaki.load_file(f'modins/modin.bak.{Z}')
+            modin = modin.split("\n")
+
+            if set_nmodels_to != None:
+                nmods = str(set_nmodels_to).rjust(5, '0')
+                modin[0] = modin[0][:94] + f" {nmods}" + modin[0][100:]
+
+            file.write("\n".join(modin))
 
     def generate_datafile(self, loc):
         dfile = self.fetch_datafile()
@@ -225,7 +300,7 @@ class STARSController:
             f.writelines(dfile)
             f.truncate()
 
-    def setup_binary_evolution(self, dfile=''):
+    def setup_binary_evolution(self, dfile='data'):
         """
         Modifies data to allow for binary evolution. Sets the following
         parameters:
@@ -253,7 +328,7 @@ class STARSController:
 
         self.configure_parameters(params)
 
-    def setup_single_evolution(self, dfile=''):
+    def setup_single_evolution(self, dfile='data'):
         """
         Modifies data to allow for single star evolution. Sets the following
         parameters:
@@ -299,12 +374,12 @@ class STARSController:
             'RML': float(mass),
             'IMODE': 1,
             'IX': 0,
+            'IY': 0,
             'IZ': 0,
-            'IX': 0,
             'ITH': 0
         }
 
-        self.setup_single_evolution()
+        self.setup_single_evolution(dfile=self._datafile)
         self.configure_parameters(params)
 
     def set_output_directory(self, directory):
@@ -335,13 +410,13 @@ class STARSController:
             for param, val in self._params.items():
                 dfile.set(param, val)
 
-    def run(self, timeout=5*60, cwd=None, warn=True):
+    def run(self, timeout=5*60, cwd=None, warn=True, time_me=False):
         """Runs ./run_bs
 
         Returns:
             tuple -- The output from run() above.
         """
-        if self._options == None:
+        if self._options is None:
             wd = os.getcwd()
 
             if cwd is not None:
@@ -350,11 +425,26 @@ class STARSController:
 
             self.commit_parameters()
 
-            out, err, reason = self.terminal_command(f'{self._run_bs_location}/run_bs', timeout=timeout, warn=warn)
+            if time_me:
+                time_start = time.time_ns()
+
+            cmd = f'{self._run_bs_location}/run_bs'
+
+            out, err, reason = self.terminal_command(cmd,
+                                                     timeout=timeout,
+                                                     warn=warn)
+
+            if time_me:
+                time_end = time.time_ns()
+
+                delta_time = time_end - time_start
 
             os.chdir(wd)
 
-            return out, err, reason
+            if time_me:
+                return out, err, reason, delta_time
+            else:
+                return out, err, reason
         else:
             out_dir = self._options['output_directory']
             if not os.path.exists(out_dir):
@@ -392,7 +482,8 @@ class STARSController:
                 self.configure_parameters(this_run)
                 self.commit_parameters()
 
-                out, err, reason = self.terminal_command(f'{self._run_bs_location}/run_bs', timeout=timeout)
+                cmd = f'{self._run_bs_location}/run_bs'
+                out, err, reason = self.terminal_command(cmd, timeout=timeout)
 
                 if reason != 'finished':
                     with open('stderr.debug', 'w') as f:
@@ -420,17 +511,17 @@ class STARSController:
         i = 0
 
         with FileReadBackwards(file, encoding="utf-8") as frb:
-            for l in frb:
+            for line in frb:
                 while len(q) > 8:
                     q.pop(0)
                 q.append(l)
-                if 'dt/age/MH/MHe' in l.strip():
+                if 'dt/age/MH/MHe' in line.strip():
                     break
 
         modelblock = []
 
-        for l in reversed(q):
-            modelblock.append(l)
+        for line in reversed(q):
+            modelblock.append(line)
 
         if not as_obj:
             return modelblock
@@ -469,15 +560,16 @@ class STARSController:
                 i += 8
             return models
 
-    def evolve_async(self, masses,
-                           timeout: int=20*60,
-                           evolution_dir: str="",
-                           attempt_he_flash: bool=True,
-                           data_params: dict=dict(),
-                           reserve_core: bool=True,
-                           logged_masses: bool=False,
-                           ZAMS_files_location: str="",
-                           metallicity: str="z020"):
+    def evolve_async(self,
+                     masses,
+                     timeout: int = 20*60,
+                     evolution_dir: str = "",
+                     attempt_he_flash: bool = True,
+                     data_params: dict = dict(),
+                     reserve_core: bool = True,
+                     logged_masses: bool = False,
+                     ZAMS_files_location: str = "",
+                     metallicity: str = "z020"):
         # OLD_DFILE_LOC = self._datafile
 
         if len(data_params.keys()) == 0:
@@ -520,9 +612,10 @@ class STARSController:
                 num_run_bs = len(directory.rstrip("/").split("/"))
                 run_bs = ("../" * num_run_bs).rstrip("/")
 
-                if logged_masses: mass = 10**mass
+                if logged_masses:
+                    mass = 10**mass
 
-                update = lambda *a: pbar.update(1)
+                def update(*a): pbar.update(1)
                 out = pool.apply_async(_worker_evolve,
                                        args=(directory,
                                              timeout,
@@ -557,20 +650,23 @@ class STARSController:
             return x in kaitiaki.helpers.Range(y-threshold*y, y+threshold*y)
 
         try:
-            new_model_number = min({int(mod[0]) for mod in models if near(mod[2], required_he_core_mass)}) - 5000 # our pre-generated 3Msunmodel
-                                           # starts at NMOD=5000.
+            he_mass = required_he_core_mass
 
-            self.output("status", f"He Core Mass required: {required_he_core_mass}")
+# our pre-generated 3Msun model starts at NMOD=5000.
+            mod_nums = {int(mod[0]) for mod in models if near(mod[2], he_mass)}
+            new_model_number = min(mod_nums) - 5000
+
+            self.output("status", f"He Core Mass required: {he_mass}")
         except ValueError:
-            self.output("error", ("No matching model found for He "
-                                 f"core mass {required_he_core_mass}. "
-                                 "The requested model mass was "
-                                 f"{target_mass} Msun."))
+            self.output("error", (f"No matching model found for He "
+                                  f"core mass {required_he_core_mass}. "
+                                  f"The requested model mass was "
+                                  f"{target_mass} Msun."))
 
-            raise ValueError(("No matching model found for He "
-                             f"core mass {required_he_core_mass}. "
-                             "The requested model mass was "
-                             f"{target_mass} Msun."))
+            raise ValueError((f"No matching model found for He "
+                              f"core mass {required_he_core_mass}. "
+                              f"The requested model mass was "
+                              f"{target_mass} Msun."))
 
         # required_mass = models.get_by_modelnum(new_model_number).get('MH')
         required_mass = models[new_model_number][3][1]
@@ -605,9 +701,9 @@ class STARSController:
                     # Now iterate over the rest of the model file
                     # which is the next NMESH lines.
                     for k in range(nmesh):
-                        line = modout.readline() # grab the line
-                        model.append(line) # store it
-                    break # ok, we only need this model, so stop here.
+                        line = modout.readline()  # grab the line
+                        model.append(line)  # store it
+                    break  # ok, we only need this model, so stop here.
 
             self.output('status', f'model found. writing...')
 
@@ -615,9 +711,16 @@ class STARSController:
 
         modout.close()
 
-        self.output('status', f"Inferred required model number from pre-generated 3Msun star: {new_model_number}")
+        new_nmod = new_model_number
+
+        self.output('status', (f"Inferred required model number from "
+                               f"pre-generated 3Msun star: {new_nmod}"))
+
         new_model_number = modelblock[0].strip().split()[0]
-        self.output('status', f"New model number from the out file you just ran: {new_model_number} (should be close to last printout)")
+
+        self.output('status', (f"New model number from the out file you "
+                               f"just ran: {new_model_number} (should be "
+                               "close to last printout)"))
 
         self.output('info', f'Prepared the new modin')
 
@@ -629,17 +732,19 @@ class STARSController:
                                    f"{filedir}/{file}.prehf"))
 
         params = {
-            'IMODE': 1, # Single-star mode
-            'IML1': 9, # RE-ML: target a specific mass.
-            'IML2': 0, # No ML for the secondary (because there is none.)
-            'RML': target_mass, # This is the target ZAMS mass in Msun
-            'RMG': 0, # Outdated, otherwise the code doesn't iterate past one loop
-            'ITH': 0, # Thermal expansion off
-            'IX': 0, # Hydrogen burning off
-            'IY': 0, # Helium burning off
-            'IZ': 0, # Metal burning off
+            'IMODE': 1,          # Single-star mode
+            'IML1': 9,           # RE-ML: target a specific mass.
+            'IML2': 0,           # No ML for the secondary
+                                 # (because there isn't one.)
+            'RML': target_mass,  # This is the target ZAMS mass in Msun
+            'RMG': 0,            # Outdated, otherwise the code doesn't
+                                 # iterate past one loop
+            'ITH': 0,            # Thermal expansion off
+            'IX': 0,             # Hydrogen burning off
+            'IY': 0,             # Helium burning off
+            'IZ': 0,             # Metal burning off
             'NCH': 1,
-            'ISTART': 0, # Don't reset age, dt, nmod,
+            'ISTART': 0,         # Don't reset age, dt, nmod,
             'NNMOD': new_model_number
         }
 
@@ -653,9 +758,11 @@ class STARSController:
                 fout.write(stdout)
                 ferr.write(stderr)
 
-        self.output('info', f'Finished the inflationary stage of the reference model. Reason: {status}')
+        self.output('info', (f'Finished the inflationary stage of the '
+                             f'reference model. Reason: {status}'))
 
-        self.output('info', f'Evolved the reference model to the target mass of {target_mass}')
+        self.output('info', (f'Evolved the reference model to the target '
+                             f'mass of {target_mass}'))
 
         if status == 'finished':
             self.modout_to_modin(modout_location=f"{filedir}/modout",
@@ -664,15 +771,16 @@ class STARSController:
             # self.terminal_command("cp pseudoev/modout.3 modin")
 
             params = {
-                'IMODE': 1, # Single-star mode
+                'IMODE': 1,  # Single-star mode
                 'IML1': 5,
-                'IML2': 0, # No ML for the secondary (because there is none.)
-                'RML': 0, # This is the target ZAMS mass in Msun
-                'RMG': 0, # Outdated, otherwise the code doesn't iterate past one loop
+                'IML2': 0,   # No ML for the secondary (because there is none.)
+                'RML': 0,    # This is the target ZAMS mass in Msun
+                'RMG': 0,    # Outdated, otherwise the code doesn't
+                             # iterate past one loop
                 'ITH': 1,
                 'IX': 1,
-                'IY': 1, # Helium burning off
-                'IZ': 1, # Metal burning off
+                'IY': 1,     # Helium burning off
+                'IZ': 1,     # Metal burning off
                 'ISTART': 1,
                 'NCH': 2,
                 'NNMOD': new_model_number
@@ -707,10 +815,10 @@ class STARSController:
             self.output('error', f"An error occurred in the first evolution stage. Reason: {status}")
             self.output('error', stderr)
 
-
-    def modout_to_modin(self, modout_location="modout",
-                              modin_location="modin",
-                              n_models_ago=0):
+    def modout_to_modin(self,
+                        modout_location="modout",
+                        modin_location="modin",
+                        n_models_ago=0):
         """Moves the last model in modout to modin
 
         Reads modout to determine the number of lines to move (columns 88-94 of the first line).

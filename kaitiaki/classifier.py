@@ -6,6 +6,7 @@ import tabulate
 
 import kaitiaki
 
+
 @np.vectorize
 def compute_separation(P, M, m):
     """Computes the separation of a BSS
@@ -25,14 +26,26 @@ def compute_separation(P, M, m):
     """
 
     G = 6.67430e-11
-    SOLAR_RADIUS      = 696340000
-    SOLAR_MASS        = 1.989e30
+    SOLAR_RADIUS = 696340000
+    SOLAR_MASS = 1.989e30
 
-    a = ((P * 60 * 60 * 24)**2 * (G * (M+m) * SOLAR_MASS) / (4 * np.pi **2))**(1/3) / SOLAR_RADIUS
+    period_in_secs = (P * 60 * 60 * 24)
+    gravitational_parameter = G * (M+m) * SOLAR_MASS
+    four_pi_sq = 4 * np.pi ** 2
+
+    sep_cubed = (period_in_secs**2 * gravitational_parameter / four_pi_sq)
+
+    a = sep_cubed**(1/3) / SOLAR_RADIUS
 
     return a
 
-def diagnosis_plot(files_loc='.', time_axis='age', fname=None, fext='', temp=None, lum=None):
+
+def diagnosis_plot(files_loc: str = '.',
+                   time_axis: str = 'age',
+                   fname: str | None = None,
+                   fext: str = '',
+                   temp=None,
+                   lum=None):
     """Generates a diagnosis plot for a model.
 
     This is a 3x3 plot, with the following axes (left to right, top to bottom):
@@ -113,37 +126,42 @@ def diagnosis_plot(files_loc='.', time_axis='age', fname=None, fext='', temp=Non
         pf.kippenhahn_diagram(ax=ax[star], x_axis=axis, legend=False)
         pf.hr_diagram(ax=axes[1,1], ls=ls[star])
 
-        if temp != None:
-            axes[1,1].errorbar(temp[itr].n, lum[itr].n, xerr=temp[itr].s, yerr=lum[itr].s)
+        if temp is not None:
+            axes[1, 1].errorbar(temp[itr].n, lum[itr].n,
+                                xerr=temp[itr].s,
+                                yerr=lum[itr].s)
 
         if not secondary_exists:
             cs = 'rgbkm'
 
             for i, species in enumerate('XYCNO'):
                 pf.plot(time_axis, species,
-                                   ax=axes[2,1],
-                                   c=cs[i],
-                                   label=species)
+                        ax=axes[2,1],
+                        c=cs[i],
+                        label=species)
 
-            axes[2,1].legend()
+            axes[2, 1].legend()
 
         # Column 3
-        pf.plot(time_axis, 'log(L)', ax=axes[0,2], ls=ls[star])
-        pf.plot(time_axis, 'log(T)', ax=axes[1,2], ls=ls[star])
-        pf.plot(time_axis, 'DM1W', ax=axes[2,2], ls=ls[star])
+        pf.plot(time_axis, 'log(L)', ax=axes[0, 2], ls=ls[star])
+        pf.plot(time_axis, 'log(T)', ax=axes[1, 2], ls=ls[star])
+        pf.plot(time_axis, 'DM1W', ax=axes[2, 2], ls=ls[star])
 
-        axes[0,0].set_title("mass")
-        axes[1,0].set_title("radius")
-        axes[2,0].set_title("Helium luminosity")
+        axes[0, 0].set_title("mass")
+        axes[1, 0].set_title("radius")
+        axes[2, 0].set_title("Helium luminosity")
 
-        axes[0,2].set_title('log(L)')
-        axes[1,2].set_title('log(T)')
-        axes[2,2].set_title('mass loss rate')
+        axes[0, 2].set_title('log(L)')
+        axes[1, 2].set_title('log(T)')
+        axes[2, 2].set_title('mass loss rate')
 
     if fname is not None:
         if fname.split(".")[-1] != 'png':
             fname = fname + '.png'
-        plt.savefig(fname, dpi=600, facecolor='white', bbox_inches='tight')
+        plt.savefig(fname,
+                    dpi=600,
+                    facecolor='white',
+                    bbox_inches='tight')
 
     explainer1, plausible_outcomes1, outcome1 = go(f'{files_loc}/out',
                                                    f'{files_loc}/plot',
@@ -156,10 +174,17 @@ def diagnosis_plot(files_loc='.', time_axis='age', fname=None, fext='', temp=Non
     dual_explain((explainer1, plausible_outcomes1, outcome1),
                  (explainer2, plausible_outcomes2, outcome2))
 
-def go(outfile_loc: str='out', plotfile_loc: str='plot', as_string: bool=False, explain: bool=False, detailed_return: bool=False, has_he_flash: bool=False):
+
+def go(outfile_loc: str = 'out',
+       plotfile_loc: str = 'plot',
+       as_string: bool = False,
+       explain: bool = False,
+       detailed_return: bool = False,
+       has_he_flash: bool = False):
     """Classifies a model according to the modelcheck criteria used by Jan.
 
-    Performs a rudimentary classification based on manually inspected values. It is my wish to replace this one day with a CNN.
+    Performs a rudimentary classification based on manually inspected values.
+    It is my wish to replace this one day with a CNN.
 
     Args:
         outfile_loc (str): The outfile to load. (default: `'out'`)
@@ -211,7 +236,13 @@ def go(outfile_loc: str='out', plotfile_loc: str='plot', as_string: bool=False, 
 
     sep = compute_separation(BINARY_PERIOD, MASS, BINARY_MASS - MASS)
 
-    exclude = ['as_string', 'explain', 'out', 'plot', 'exclude', 'LHE', 'detailed_return']
+    exclude = ['as_string',
+               'explain',
+               'out',
+               'plot',
+               'exclude',
+               'LHE',
+               'detailed_return']
     explainer = {k: v for k, v in locals().items() if k not in exclude}
 
     plausible_outcomes = [0.0]
@@ -317,7 +348,7 @@ def go(outfile_loc: str='out', plotfile_loc: str='plot', as_string: bool=False, 
                                   and (CO_CORE_MASS > 1.35)
                                   and (CENTRAL_TEMP > 8.6)
                                   and (HE_CORE_MASS > 1.35)):
-        #SNe - will explode but needs further pushing
+        # SNe - will explode but needs further pushing
         plausible_outcomes.append(1.4)
 
     if ((MASS < 3.0) and (MASS > 1.4)
@@ -342,13 +373,13 @@ def go(outfile_loc: str='out', plotfile_loc: str='plot', as_string: bool=False, 
                                   and (CO_CORE_MASS > 1.35)
                                   and (CENTRAL_TEMP > 8.8)
                                   and (HE_CORE_MASS > 1.35)):
-        #SNe - not quite close enough to end but okay
+        # SNe - not quite close enough to end but okay
         outcome=1.2
 
     if ((MASS > 2.0) and (HE_CORE_MASS > 1.4)
                      and (CO_CORE_MASS > 1.3)
                      and (ONE_CORE_MASS > 0.1)):
-        #SNe - all big enough cores so definitely okay
+        # SNe - all big enough cores so definitely okay
         plausible_outcomes.append(1.1)
 
     if (out.nan_num() > 8):
@@ -361,7 +392,7 @@ def go(outfile_loc: str='out', plotfile_loc: str='plot', as_string: bool=False, 
         plausible_outcomes.append(-1.0)
 
     if (plausible_outcomes[-1] < 0.1 and AGE > 14e9):
-        #Universe ain't old enough.
+        # Universe ain't old enough.
         plausible_outcomes.append(7.0)
 
     if (0.1 < HE_CORE_MASS < 0.55) and (CENTRAL_TEMP > 7.9):
@@ -384,11 +415,15 @@ def go(outfile_loc: str='out', plotfile_loc: str='plot', as_string: bool=False, 
     if detailed_return:
         return explainer, plausible_outcomes, outcome
 
-    if as_string: outcome = to_str(outcome)
+    if as_string:
+        outcome = to_str(outcome)
+
     return outcome
+
 
 def to_str(code):
     return strings()[code]
+
 
 def strings():
     return {
@@ -419,6 +454,7 @@ def strings():
         9.0: "Thermally Pulsing"
     }
 
+
 def explain_result(explainer, plausible_outcomes, outcome, speak=True):
     max_line_length = 78
 
@@ -430,10 +466,16 @@ def explain_result(explainer, plausible_outcomes, outcome, speak=True):
 
     exclude_from_table = ['RADIUS', 'outfile_loc', 'plotfile_loc']
 
-    table = tabulate.tabulate([[k, v] for k, v in explainer.items() if k not in exclude_from_table], ['Parameter', 'Value'], tablefmt='fancy_grid')
+    table = tabulate.tabulate([
+                                [k, v] for k, v in explainer.items()
+                                if k not in exclude_from_table
+                              ],
+                              ['Parameter', 'Value'],
+                              tablefmt='fancy_grid')
 
     for i in range(4):
-        header[i] = "=" * int((max_line_length - len(header[i])) / 2) + header[i] + "=" * int((max_line_length - len(header[i])) / 2)
+        equals_signs = "=" * int((max_line_length - len(header[i])) / 2)
+        header[i] = equals_signs + header[i] + equals_signs
 
     outstr = f"""
 ==============================================================================
@@ -477,6 +519,7 @@ I classify as {outcome} ({to_str(outcome)})"""
     else:
         return outstr, multiple_outstr.rstrip()
 
+
 def dual_explain(obj1, obj2):
     outstr1, multiple_outstr1 = explain_result(*obj1, speak=False)
     outstr2, multiple_outstr2 = explain_result(*obj2, speak=False)
@@ -493,7 +536,8 @@ def dual_explain(obj1, obj2):
         outstr1.append("")
 
     for i, line in enumerate(outstr1):
-        dual_outstr.append(f"{line.rstrip().ljust(78)} | {outstr2[i].rstrip().ljust(78)}")
+        fmt = f"{line.rstrip().ljust(78)} | {outstr2[i].rstrip().ljust(78)}"
+        dual_outstr.append(fmt)
 
     dual_outstr = "\n".join(dual_outstr)
     kaitiaki.debug('info', dual_outstr)

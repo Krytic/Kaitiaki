@@ -8,3 +8,7 @@ loge_y  = lambda ax, arr: np.log(arr) if ax=='y' else arr
 loge_x  = lambda ax, arr: np.log(arr) if ax=='x' else arr
 
 unlog_both = lambda ax, arr: 10**arr
+
+absval = lambda ax, arr: np.abs(arr) if ax=='y' else arr
+
+null = lambda ax, arr: arr

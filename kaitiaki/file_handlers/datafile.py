@@ -1,7 +1,11 @@
 from copy import deepcopy
 from decimal import Decimal
 from os import path
+import pickle
+import tempfile
 
+import colorama
+from colorama import Fore, Back, Style
 import pandas as pd
 import numpy as np
 import matplotlib
@@ -11,6 +15,7 @@ from tqdm import tqdm
 
 import kaitiaki
 
+
 class DataFileParser:
     def __init__(self, file_pointer='data'):
         """Parses a datafile. Must be used as a context manager:
@@ -18,32 +23,156 @@ class DataFileParser:
         >>> with DataFileParser('data') as dfile:
         >>>    ...
 
-        If not used as a context manager, only the get() method is
-        available.
+        If not used as a context manager, only the get(), as_dict(), and
+        comparison dunder methods are available.
 
         Keyword Arguments:
-            file_pointer {str} -- The location of the datafile (default: {'data'})
+            file_pointer {str} -- The location of the datafile
+                                  (default: {'data'})
         """
         self._file = file_pointer
 
     def get(self, param):
-        with self as df:
-            return df.get(param)
+        with self as data:
+            return data.get(param)
+
+    def to_pickle(self, path: str = "configuration.params"):
+        params = self.as_dict()
+
+        with open(path, 'wb') as handle:
+            pickle.dump(params, handle)
+
+    def explain(self, param):
+        val = self.get(param)
+        if param in kaitiaki.constants.disambiguable:
+            meaning = kaitiaki.constants.disambiguable[param]
+
+            lookup = meaning['options'].items()
+            valid = [f"    {key}: {value}" for key, value in lookup]
+            valid = '\n'.join(valid)
+
+            disambiguation = f"""
+===================
+== Disambiguator ==
+===================
+
+Selected: {param.upper()} ({meaning['description']})
+Valid Values:
+{valid}
+
+Current Value: {val} ({meaning['options'][val]})
+            """
+
+            print(disambiguation)
+
+    def show_in_file(self, param):
+        param = param.lower()
+        if param not in kaitiaki.constants.dfile_struct.keys():
+            raise KeyError('Invalid parameter')
+
+        with self as data:
+            # Now we're cooking
+            colorama.init()
+            row_loc, start, finish = kaitiaki.constants.dfile_struct[param]
+            substr = data._contents[row_loc][start:finish]
+
+            infos = kaitiaki.constants.dfile_struct.values()
+            j = max([info[0] for info in infos])  # Get the max row number
+
+            def hl(string):
+                return Fore.GREEN + Style.BRIGHT + string + Style.RESET_ALL
+
+            for i, row in enumerate(data._contents):
+                if i > j:
+                    break
+                if i != row_loc:
+                    print(row)
+                else:
+                    if finish is None:
+                        end = ''
+                    else:
+                        end = row[finish:]
+                    print(row[:start] + hl(substr) + end)
+
+    def as_dict(self):
+        keys = list(kaitiaki.constants.dfile_struct.keys())
+
+        return self.get(keys)
+
+    def __eq__(self, other):
+        my_values = self.as_dict()
+        other_val = other.as_dict()
+
+        return my_values == other_val
+
+    def changes_from_base(self):
+        base_dfile_contents = kaitiaki.load_file('data.bak')
+
+        # I hate this implementation -- better to get a path to data.bak
+        # and then load that here...
+        _fp = tempfile.NamedTemporaryFile('w+')
+
+        _fp.write("\n".join(base_dfile_contents))
+        _fp.flush()
+        _fp.seek(0)
+
+        print(base_dfile_contents)
+
+        base_dfile_object = kaitiaki.file.data(_fp.name)
+
+        mismatches = self.compare(base_dfile_object)
+
+        for key, val in mismatches.items():
+            mismatches[key] = {
+                'current': val['self'],
+                'base': val['other']
+            }
+
+        return mismatches
+
+    def __str__(self):
+        with self as data:
+            return '\n'.join(data._contents)
+
+    def compare(self, other, tag_names=('other', 'self')):
+        mismatches = dict()
+
+        for key in kaitiaki.constants.dfile_struct.keys():
+            other_val = other.get(key)
+            my_val = self.get(key)
+
+            if other_val != my_val:
+                mismatches[key] = {tag_names[0]: other_val,
+                                   tag_names[1]: my_val}
+
+        return mismatches
 
     def __enter__(self):
         class Parser():
             def __init__(self, file_pointer):
                 self._datafile = file_pointer
                 self._datafile_pointer = open(self._datafile, 'r+')
-                self._original_contents = self._datafile_pointer.read().split("\n")
+                self._original_contents = (self._datafile_pointer.read()
+                                                                 .split("\n"))
                 self._contents = deepcopy(self._original_contents)
+
+            def __str__(self):
+                return "\n".join(self._contents)
+
+            def set_from_pickle(self, path):
+                with open(path, 'rb') as handle:
+                    params = pickle.load(handle)
+
+                self.set(params)
 
             def _check_scientific_notation(self, param):
                 idx = self._get_index_of_parameter(param)
                 if idx[0] == 3:
-                    return 1 # everything on this line requires scientific notation to 1dp
+                    # This line requires scientific notation to 1dp
+                    return 1
                 elif idx[0] in [17, 18]:
-                    return 2 # everything on these lines requires scientific notation to 2dp
+                    # These lines require scientific notation to 2dp
+                    return 2
                 else:
                     if param.lower() in ['ct8', 'ct9', 'ct10']:
                         return 1
@@ -101,12 +230,6 @@ class DataFileParser:
                 # 3-tuple: (line number, starting point, ending point)
                 lookup_table = kaitiaki.constants.dfile_struct
 
-                """
-                    God is dead. God remains dead. And we have killed him.
-
-                    - Nietzsche
-                """
-
                 if param in lookup_table.keys():
                     return lookup_table[param]
                 else:
@@ -114,10 +237,14 @@ class DataFileParser:
 
             def elucidate(self, file, elucidate_only=None):
                 with open(file, 'w') as f:
-                    if elucidate_only == None:
+                    if elucidate_only is None:
                         elucidate_only = kaitiaki.constants.dfile_struct.keys()
 
-                    lines = [f"[{key.upper()}]: {self.get(key)}\n" for key in elucidate_only]
+                    lines = []
+
+                    for key in elucidate_only:
+                        lines.append(f"[{key.upper()}]: {self.get(key)}\n")
+
                     f.writelines(lines)
 
             def _write_to_pointer(self, pointer, data, mode):
@@ -133,27 +260,27 @@ class DataFileParser:
                 if not path.exists(self._datafile + ".bak"):
                     self.make_backup()
 
-            def set(self, param, value):
+            def _setitem(self, param, value):
                 idx = self._get_index_of_parameter(param)
 
                 value = str(value)
 
                 if param.lower() == 'zs':
                     if value[0] == 'z':
-                        if value [1:3] != 'em':
+                        if value[1:3] != 'em':
                             value = '0.' + value[1:]
                         else:
                             value = str(10**(-int(value[3:])))
 
-                num_dp_of_scientific_notation = self._check_scientific_notation(param)
+                scientific_notation_dp = self._check_scientific_notation(param)
                 num_dp = self._determine_decimal_places(param)
 
-                if num_dp_of_scientific_notation > 0:
-                    value = f'%.{num_dp_of_scientific_notation}E' % Decimal(value)
+                if scientific_notation_dp > 0:
+                    value = f'%.{scientific_notation_dp}E' % Decimal(value)
                 if num_dp > 0:
                     value = f'%.{num_dp}f' % Decimal(value)
 
-                if idx[2] == None:
+                if idx[2] is None:
                     endpoint = len(self._contents[idx[0]])
                 else:
                     endpoint = idx[2]
@@ -168,18 +295,51 @@ class DataFileParser:
 
                 self._contents[idx[0]] = new_line
 
-                self._write_to_pointer(self._datafile_pointer, self._contents, 'replace')
+                self._write_to_pointer(self._datafile_pointer,
+                                       self._contents,
+                                       'replace')
 
-            def get(self, param):
+            def set(self, *args):
+                if len(args) == 1:
+                    try:
+                        for key, value in args[0].items():
+                            self._setitem(key, value)
+                    except AttributeError:
+                        raise TypeError(("If only one argument is passed to "
+                                         "set(), it should be a dictionary "
+                                         "of key-value pairs."))
+                elif len(args) == 2:
+                    self._setitem(*args)
+                else:
+                    raise TypeError(("Malformed arguments to set(). "
+                                     "I expected a dictionary of key-value "
+                                     "pairs, or a key and a value."))
+
+            def _getitem(self, param):
                 idx = self._get_index_of_parameter(param)
 
                 val = self._contents[idx[0]][idx[1]:idx[2]]
 
-                num_dp = self._check_scientific_notation(param) + self._determine_decimal_places(param)
+                decimal_places = self._determine_decimal_places(param)
+                scientific_notation = self._check_scientific_notation(param)
+
+                num_dp = scientific_notation + decimal_places
 
                 if num_dp > 0:
                     return float(val)
+
                 return int(val)
+
+            def get(self, param):
+                if isinstance(param, list):
+                    ret_array = dict()
+
+                    for item in param:
+                        ret_array[item] = (self._getitem(item))
+
+                    return ret_array
+
+                return self._getitem(param)
 
             def restore_backup(self):
                 pass

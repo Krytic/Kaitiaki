@@ -4,6 +4,7 @@ import subprocess
 
 import kaitiaki
 
+
 def execute(command, timeout=5*60, cwd=None, warn=True):
     """Executes a terminal command.
 
@@ -34,11 +35,18 @@ def execute(command, timeout=5*60, cwd=None, warn=True):
         TAT = TAT.strftime("%d %b, %H:%M:%S (%p)")
 
         if warn:
-            kaitiaki.debug("warning", f"Woah! I've been asked to run {command} with a maximum timeout of {timer} (default is 00h 05m 00s).\nI'm assuming this is right, but double check if you were not expecting this.\nCurrent time: {now}\nTimeout at: {TAT}")
+            err_msg = (f"I've been asked to run {command} with a maximum "
+                       f"timeout of {timer} (default is 00h 05m 00s).\n"
+                       f"I'm assuming this is right, but double check if you "
+                       f"were not expecting this.\nCurrent time: {now}\n"
+                       f"Timeout at: {TAT}")
+
+            kaitiaki.debug("warning", err_msg)
 
     stdout, stderr, reason = _custom_subprocess_handler(command, timeout, cwd)
 
     return stdout, stderr, reason
+
 
 def _custom_subprocess_handler(command, timeout=5*60, cwd=None):
     """
@@ -61,8 +69,13 @@ def _custom_subprocess_handler(command, timeout=5*60, cwd=None):
         &copy; original author. Modified on 06 May 2022 by Sean Richards
         (@Krytic).
     """
-    with subprocess.Popen(command.split(" "), preexec_fn=os.setsid, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
+    with subprocess.Popen(command.split(" "),
+                          preexec_fn=os.setsid,
+                          stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE) as process:
+
         wd = os.getcwd()
+
         try:
             if cwd is not None:
                 # Man fuck linux
@@ -107,7 +120,9 @@ def _custom_subprocess_handler(command, timeout=5*60, cwd=None):
             os.chdir(wd)
 
         try:
-            return stdout.decode('utf-8').strip(), stderr.decode('utf-8').strip(), reason
+            return (stdout.decode('utf-8').strip(),
+                    stderr.decode('utf-8').strip(),
+                    reason)
         except AttributeError:
             try:
                 return stdout.strip(), stderr.strip(), reason

@@ -16,6 +16,12 @@ from tqdm import tqdm
 
 import kaitiaki
 
+########################################################################
+#                                NOTICE                                #
+#                              DEPRECATED                              #
+#                              DO NOT USE                              #
+########################################################################
+
 def _allocate_cores(reserve_core: bool):
     offset = 0
 
@@ -82,6 +88,8 @@ class GridMaker:
                                     modin_location=None,
                                     COTable_location=None,
                                     are_logged=False):
+
+        raise Exception("GridMaker has been deprecated. More tools will be provided in future.")
         # Most of this function is determining the validity of input.
         try:
             a = ZAMS_masses[0]
