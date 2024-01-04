@@ -187,51 +187,37 @@ class plot:
              **kwargs):
         """Plots the parameter given by x_axis against y_axis.
 
-        Arguments:
-            x_axis {str}           -- The x-axis to plot. Must be a key of
-                                      self._data
-            y_axis {str}           -- The y-axis to plot. Must be a key of
-                                      self._data
-            transform {callable}   -- A function to apply to each axis
-            ax {Axes2D}            -- An Axes2D instance to plot on.
-                                      If None, a new figure is created.
-            fix_core_masses {bool} -- whether to fix the core masses such that
-                                      the He core follows the envelope if the
-                                      star becomes entirely stripped.
-            **kwargs {variable}    -- Any keyword arguments to be passed to
-                                      plt.plot.
-
-        Notes:
-            transform should be a function matching the call-signature
-            transform(axis, array), where axis is 'x' or 'y' and array is the
-            corresponding axis to variable `axis`. The function should return
-            the transformed axis. For instance, the following function
-
-            ```
-            def do_transform(axis, array):
-                if axis == 'y': return np.log10(array)
-                if axis == 'x': return array + 5
-            ```
-
-            shifts the x axis by 5 and logs the y-axis content. The following
-            function
-
-            ```
-            def do_transform(axis, array):
-                return np.log10(array)
-            ```
-
-            logs both axes, and the following lambda:
-
-            ```
-            do_transform = lambda axis, array: array
-            ```
-
-            does nothing (and is equivalent to passing transform=None).
+        Args:
+            x_axis (str): The x-axis to plot. Must be a key of self._data
+            y_axis (str): The y-axis to plot. Must be a key of self._data
+            transform (callable): A function to apply to each axis
+            ax (Axes2D): An Axes2D instance to plot on. If None, a new figure is created.
+            fix_core_masses (bool): Whether to fix the core masses such that the He core follows the envelope if the star becomes entirely stripped.
+            **kwargs (variable): Any keyword arguments to be passed to plt.plot.
 
         Returns:
-            obj {list} -- The list of Line2d objects plotted by plt.plot.
+            list: The list of Line2d objects plotted by plt.plot.
+
+        Notes:
+            transform should be a function matching the call-signature :code:`transform(axis, array)`, where axis is 'x' or 'y' and array is the corresponding axis to variable :code:`axis`. The function should return the transformed axis. For instance, the following function::
+
+                def do_transform(axis, array):
+                    if axis == 'y': return np.log10(array)
+                    if axis == 'x': return array + 5
+
+            shifts the x axis by 5 and logs the y-axis content. The following
+            function::
+
+                def do_transform(axis, array):
+                    return np.log10(array)
+
+            logs both axes, and the following lambda:::
+
+                do_transform = lambda axis, array: array
+
+            does nothing (and is equivalent to passing transform=None).
         """
+
         if x_axis == 'collapsetime':
             age_at_collapse = self.get('age').to_numpy()[-1]
             current_age = self.get('age').to_numpy()
@@ -290,17 +276,18 @@ class plot:
     def pad_age(self, by):
         self._data['age'] += by
 
-    def parse_plotfile(self, fname, row, is_dummy):
-        """
-        Parses a plotfile.
+    def parse_plotfile(self, fname: str = 'plot',
+                       row: str = 'all',
+                       is_dummy: bool = False):
+        """Parses a plotfile.
 
-        Arguments:
-            fname    {str}  -- the filename of the plot file to be loaded
-            row      {str}  -- the row that is to be loaded
-                               (obsolete here, you should specify "all",
-                               will be removed in a future version)
-            is_dummy {bool} -- whether the resultant dataframe should be
-                               empty or not
+        Args:
+            fname (str): The plot file to load
+            row (str): The row to load (obsolute -- always pass "all")
+            is_dummy (bool): Whether the dataframe should be empty or not
+
+        Returns:
+            [type]: [description]
         """
 
         c = kaitiaki.constants.PLOT_FILE_COLUMNS
