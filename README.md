@@ -1,5 +1,7 @@
 ![Kaitiaki Logo](KaitiakiLogo.png)
 
+[![Documentation Status](https://readthedocs.org/projects/kaitiaki/badge/?version=latest)](https://kaitiaki.readthedocs.io/en/latest/?badge=latest)
+
 Kaitiaki is a simple package which allows automation of a few aspects of [the Cambridge STARS code](https://people.ast.cam.ac.uk/~stars/), originally written by Peter Eggleton.
 
 ## Installation
