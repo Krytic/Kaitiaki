@@ -1,3 +1,27 @@
+#
+#
+#      .                 .--.         .--.              .     .--.
+#    .'|                 |__|         |__|            .'|     |__|
+#  .'  |                 .--.     .|  .--.          .'  |     .--.
+# <    |            __   |  |   .' |_ |  |    __   <    |     |  |
+#  |   | ____    .:--.'. |  | .'     ||  | .:--.'.  |   | ____|  |
+#  |   | \ .'   / |   \ ||  |'--.  .-'|  |/ |   \ | |   | \ .'|  |
+#  |   |/  .    `" __ | ||  |   |  |  |  |`" __ | | |   |/  . |  |
+#  |    /\  \    .'.''| ||__|   |  |  |__| .'.''| | |    /\  \|__|
+#  |   |  \  \  / /   | |_      |  '.'    / /   | |_|   |  \  \
+#  '    \  \  \ \ \._,\ '/      |   /     \ \._,\ '/'    \  \  \
+# '------'  '---'`--'  `"       `'-'       `--'  `"'------'  '---'
+#
+#  _                                         _      _                   _
+# | |                                       (_)    | |                 | |
+# | |__  _   _   ___  ___  __ _ _ __    _ __ _  ___| |__   __ _ _ __ __| |___
+# | '_ \| | | | / __|/ _ \/ _` | '_ \  | '__| |/ __| '_ \ / _` | '__/ _` / __|
+# | |_) | |_| | \__ \  __/ (_| | | | | | |  | | (__| | | | (_| | | | (_| \__ \
+# |_.__/ \__, | |___/\___|\__,_|_| |_| |_|  |_|\___|_| |_|\__,_|_|  \__,_|___/
+#         __/ |
+#        |___/
+
+
 #                   .
 #
 #                    .
@@ -15,7 +39,7 @@
 #   |    l  I   \.     ,/
 # _/j  L l\_!  _//^---^\\_
 #
-# Here be wizard.
+#      Here be wizard.
 
 import os
 
@@ -30,13 +54,12 @@ import kaitiaki.OptionLexer as lexer
 import kaitiaki.kicks as kicks
 import kaitiaki.sntools as sntools
 
-# Augments
+# Augments -- will probably be made its own project
 import kaitiaki.augments as augments
 
 # Utils
 import kaitiaki.terminal as terminal
 import kaitiaki.file as file
-# import kaitiaki.file_handlers as _filehandler
 from .utils import transforms
 
 import glisten
