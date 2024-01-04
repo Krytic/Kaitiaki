@@ -39,7 +39,8 @@ setup(name='kaitiaki',
                         'pandas',
                         'file_read_backwards',
                         'uncertainties',
-                        'tqdm'
+                        'tqdm',
+                        'glisten'
                         ],
       python_version='>=3.11'
       )
