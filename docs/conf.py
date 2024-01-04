@@ -13,9 +13,9 @@
 import os
 import sys
 sys.path.insert(0, os.path.abspath('.'))
-sys.path.insert(0, os.path.abspath('../kaitiaki'))
-sys.path.insert(0, os.path.abspath('../kaitiaki/file_handlers/'))
-sys.path.insert(0, os.path.abspath('../kaitiaki/utils/'))
+# sys.path.insert(0, os.path.abspath('../kaitiaki'))
+# sys.path.insert(0, os.path.abspath('../kaitiaki/file_handlers/'))
+# sys.path.insert(0, os.path.abspath('../kaitiaki/utils/'))
 
 
 # -- Project information -----------------------------------------------------
@@ -32,10 +32,12 @@ author = 'Sean Richards'
 # ones.
 extensions = [
     # 'sphinx_rtd_theme',
-    'sphinx.ext.autodoc',
+    'autoapi.extension',
     'sphinx.ext.coverage',
     'sphinx.ext.napoleon'
 ]
+
+autoapi_dirs = ['../kaitiaki']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

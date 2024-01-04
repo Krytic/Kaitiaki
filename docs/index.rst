@@ -13,8 +13,5 @@ Welcome to Kaitiaki's documentation!
    usage/getting_started/installation
    usage/evolution/first_run
 
-.. toctree::
-   :maxdepth: 2
-   :caption: API Documentation
-
-   source/kaitiaki
+.. note::
+   This documentation is a work in progress :-)
