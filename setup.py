@@ -38,7 +38,8 @@ setup(name='kaitiaki',
                         'matplotlib',
                         'pandas',
                         'file_read_backwards',
-                        'uncertainties'
+                        'uncertainties',
+                        'tqdm'
                         ],
       python_version='>=3.11'
       )

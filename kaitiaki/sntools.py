@@ -4,7 +4,14 @@ from scipy.integrate import quad
 from scipy.optimize import fminbound
 
 from uncertainties import ufloat
-from takahe.constants import G, SOLAR_MASS, SOLAR_RADIUS
+
+# from takahe.constants
+G = 6.67430e-11
+c = 299792458
+
+# Solar Units
+SOLAR_RADIUS = 696340000
+SOLAR_MASS = 1.989e30
 
 
 def compute_remnant_mass(path_to_file: str):
