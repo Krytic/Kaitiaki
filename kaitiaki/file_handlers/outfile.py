@@ -400,7 +400,7 @@ class outfile:
         key = max(self._models.keys())
         return self._models[key]
 
-    def __find_column(self, param: str):
+    def find_column(self, param: str):
         NWRT3 = self.pages_per_profile
         headers = self.profile_headers
 
@@ -430,7 +430,7 @@ class outfile:
 
         network_index = np.arange(N) * NWRT1
 
-        column_location, column_pagenum = self.__find_column(param)
+        column_location, column_pagenum = self.find_column(param)
 
         if column_location is not None:
             for idx in range(N):
@@ -452,7 +452,9 @@ class outfile:
                                     nrows: int = 1,
                                     ncols: int = 1,
                                     fidelity: int = 100,
-                                    span: tuple = (None, None)):
+                                    span: tuple = (None, None),
+                                    make_cbar: bool = True,
+                                    figsize=None):
 
         assert mode.lower() in ['2d', '3d'], 'mode must be 2d or 3d.'
         assert nrows > 0, 'nrows must be positive.'
@@ -469,7 +471,7 @@ class outfile:
         Y = meshpoints
         XX, YY = np.meshgrid(X, Y, indexing='ij')
 
-        fig = plt.figure()
+        fig = plt.figure(figsize=figsize)
 
         if mode == '2d':
             ax = fig.add_subplot(nrows, ncols, 1)
@@ -479,18 +481,19 @@ class outfile:
 
             levels = np.linspace(span[0], span[1], fidelity)
 
-            cmap = ax.contourf(XX, YY, results, cmap=cm.coolwarm,
+            cmap = ax.contourf(XX, YY, results, cmap=cm.bwr,
                                levels=levels)
 
             ax.set_xlabel('Model Number')
             ax.set_ylabel('Meshpoint Number')
 
-            cbar = fig.colorbar(cmap)
-            cbar.set_label(param)
+            if make_cbar:
+                cbar = fig.colorbar(cmap)
+                cbar.set_label(param)
         else:
             ax = fig.add_subplot(nrows, ncols, 1, projection='3d')
 
-            surf = ax.plot_surface(XX, YY, results, cmap=cm.coolwarm,
+            surf = ax.plot_surface(XX, YY, results, cmap=cm.bwr,
                                    linewidth=0, antialiased=False)
 
             ax.set_xlabel('Model Number')

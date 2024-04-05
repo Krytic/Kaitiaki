@@ -4,6 +4,30 @@ import subprocess
 
 import kaitiaki
 
+#              _   _
+#  _ __   ___ | |_(_) ___ ___
+# | '_ \ / _ \| __| |/ __/ _ \
+# | | | | (_) | |_| | (_|  __/
+# |_| |_|\___/ \__|_|\___\___|
+#
+
+# We are using a custom implementation of Python's subprocess handler.
+# This is documented in the _custom_subprocess_handler() method at the
+# bottom of this file. A discussion is found in its docstring and the
+# following StackOverflow link : https://stackoverflow.com/questions/70587181/terminate-child-process-on-subprocess-timeoutexpired/72135833
+#
+# I have taken the code from subprocess.run() at the following URL:
+# https://github.com/python/cpython/blob/main/Lib/subprocess.py#L510
+# and adapted it to fix my bug. The original code belongs to the Python
+# foundation and the original author. Modifications are labelled with one
+# of the following intials depending on the author of the modifications:
+# - SMR: Sean Richards
+# -
+#
+# Note to contributors: if you modify _custom_subprocess_handler(), please
+# document your contribution in the same fashion -- a comment at every change,
+# with your initials denoting the change.
+
 
 def execute(command, timeout=5*60, cwd=None, warn=True):
     """Executes a terminal command.
@@ -53,7 +77,8 @@ def _custom_subprocess_handler(command, timeout=5*60, cwd=None):
         Okay, this one deserves an explanation.
 
         I noticed that for jobs that took longer than timeout seconds
-        to run, they wouldn't be killed correctly.
+        to run, they wouldn't be killed correctly. See the following SO
+        post that I made:
 
         https://stackoverflow.com/questions/70587181/terminate-child-process-on-subprocess-timeoutexpired/72135833
 
@@ -77,16 +102,18 @@ def _custom_subprocess_handler(command, timeout=5*60, cwd=None):
         wd = os.getcwd()
 
         try:
+            # SMR: this allows us to run in the subprocess in a different dir
             if cwd is not None:
-                # Man fuck linux
-                for d in cwd.split("/"):
+                for d in cwd.split(os.sep):
                     os.chdir(d)
+            # end SMR
             stdout, stderr = process.communicate(None, timeout=timeout)
         except subprocess.TimeoutExpired as exc:
             import signal
 
-            # The magic line!
+            # SMR: the magic line!
             os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+            # end SMR
 
             try:
                 import msvcrt
@@ -111,14 +138,19 @@ def _custom_subprocess_handler(command, timeout=5*60, cwd=None):
         except:  # Including KeyboardInterrupt, communicate handled that.
             process.kill()
             # We don't call process.wait() as .__exit__ does that for us.
+            # SMR: catch stdout/stderr
             reason = 'other'
             stdout, stderr = process.communicate()
+            # end SMR
             raise
         else:
             reason = 'finished'
         finally:
+            # SMR: walk back up to the current working directory
             os.chdir(wd)
+            # end SMR
 
+        # SMR: handle stdout/stderr
         try:
             return (stdout.decode('utf-8').strip(),
                     stderr.decode('utf-8').strip(),
@@ -130,3 +162,4 @@ def _custom_subprocess_handler(command, timeout=5*60, cwd=None):
                 return stdout, stderr, reason
 
         return stdout, stderr, reason
+        # end SMR

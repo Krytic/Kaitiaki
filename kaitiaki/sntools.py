@@ -1,7 +1,7 @@
 import kaitiaki
 import numpy as np
 from scipy.integrate import quad
-from scipy.optimize import fminbound
+from scipy.optimize import fminbound, fmin
 
 from uncertainties import ufloat
 
@@ -14,34 +14,41 @@ SOLAR_RADIUS = 696340000
 SOLAR_MASS = 1.989e30
 
 
+# TODO: busted :(
 def compute_remnant_mass(path_to_file: str):
     plot = kaitiaki.file.plot(path_to_file)
+    sneplot = kaitiaki.file.sneplot(path_to_file.replace('plot', 'sneplot'))
 
     plotfile_data = plot.get(['log(R)', 'M'])
 
     mass = plotfile_data['M'].to_numpy()
     radius = plotfile_data['log(R)'].to_numpy()
 
-    # Temporarily storing BE in the carbon luminosity column (v temporary)
+    U = -sneplot.get('BE').to_numpy()[-1] * 1e7  # Joules
 
-    U = plot.get('L_(C)').to_numpy()[-1] / 1e7  # Joules
-    r = lambda M: 10**radius[np.where(mass < M)[0][-1]] * SOLAR_RADIUS  # m
+    def r(M):
+        return 10**radius[np.where(mass < M)[0][-1]] * SOLAR_RADIUS  # m
 
     M_star = mass[-1] * SOLAR_MASS  # kg
 
     energy_budget = 1e44  # Joules
 
-    print(U)
+    print(f"BE: {U}")
 
     def f(M_rem):
-        return quad(lambda M: (U - G*M/r(M)), M_rem, M_star)[0] - energy_budget
+        M_rem *= SOLAR_MASS
+        return quad(lambda M: (U-G*M/r(M)), M_rem, M_star)[0]-energy_budget
 
-    best_value, _, _, _ = fminbound(f, 1e-8, 100,
+    print(f"f(1.4): {f(1.4)}")
+
+    best_value, _, _, _ = fminbound(f, 0.16, 1000,  # MSun
                                     maxfun=10000,
                                     full_output=1,
                                     disp=3)
 
-    return best_value  # solar masses
+    # best_value = fmin(func=f, x0=1.4*SOLAR_MASS) / SOLAR_MASS
+
+    return best_value, f  # solar masses
 
 
 def post_supernova_parameters(path_to_file: str,

@@ -246,6 +246,10 @@ PLOT_FILE_COLUMNS = ['timestep', 'age', 'log(R)', 'log(T)', 'log(L)',
                      'log(Tc)'
                      ]
 
+SNEPLOT_FILE_COLUMNS = ['timestep', 'log(g)', 'ML_wind1', 'ML_wind2',
+                        'ML_windacc1', 'ML_windacc2', 'RLF', 'BE'
+                        ]
+
 DEFAULT_LEXICON_OPTIONS = {
     'relaxation_mode': 'always',
     'output_directory': '.',

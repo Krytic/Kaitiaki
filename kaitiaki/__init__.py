@@ -41,11 +41,11 @@
 #
 #      Here be wizard.
 
+# Core Python
 import os
+import importlib.resources as importlib_resources
 
-import pkg_resources
-
-# Core
+# Core kaitiaki
 import kaitiaki.STARSController as STARS
 import kaitiaki.helpers as helpers
 import kaitiaki.constants as constants
@@ -62,8 +62,10 @@ import kaitiaki.terminal as terminal
 import kaitiaki.file as file
 from .utils import transforms
 
+# Other tools I wrote
 import glisten
 
+# Metadata
 from kaitiaki._metadata import __version__
 
 # Sugar
@@ -71,9 +73,11 @@ stars = STARS.STARSController
 
 
 def load_file(filename):
-    data_path = pkg_resources.resource_filename('kaitiaki', '../backup_data')
+    # data_path = pkg_resources.resource_filename('kaitiaki', '../backup_data')
 
-    pathname = os.path.join(data_path, '..', 'backup_data')
+    # pathname = os.path.join(data_path, '..', 'backup_data')
+    # pathname = os.path.normpath(pathname)
+    pathname = importlib_resources.files('kaitiaki') / '..' / 'backup_data'
     pathname = os.path.normpath(pathname)
 
     if '..' in filename:

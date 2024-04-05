@@ -326,8 +326,8 @@ class plot:
                 if row == 'all':
                     df = pd.read_fwf(fname,
                                      names=c,
-                                     widths=spec
-                                     # infer_nrows=99999,
+                                     # widths=spec
+                                     infer_nrows=99999,
                                      )
                 else:
                     from file_read_backwards import FileReadBackwards

@@ -1,10 +1,12 @@
 import kaitiaki
 
 import os
-from .file_handlers import plotfile, outfile, datafile, modelfile
+from .file_handlers import plotfile, outfile, datafile, modelfile, sneplotfile
 
 plot = plotfile.plot
 plot2 = plotfile.plot2
+sneplot = sneplotfile.sneplot
+sneplot2 = sneplotfile.sneplot2
 
 out = outfile.outfile
 out2 = outfile.outfile2

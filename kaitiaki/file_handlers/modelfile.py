@@ -63,8 +63,8 @@ class ModelFile:
                                      .split())
 
             keys = ['mass', 'dt', 'age', 'period', 'total_mass',
-                    'energy_generation', 'NM2', 'NM_start', 'ISTAR',
-                    'H_pressure', 'He_pressure']
+                    'energy_generation', 'NM2', 'N_models_target',
+                    'NM_start', 'ISTAR', 'H_pressure', 'He_pressure']
 
             model_df.index += 1
             delta_df.index += 1
