@@ -7,6 +7,24 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
+class Model:
+    def __init__(self, model_df, delta_df, metadata, raw):
+        self.__data = {
+            'model': model_df,
+            'delta': delta_df,
+            'metadata': metadata,
+            'raw': raw
+            }
+
+    # Backwards compatibility
+    def __getitem__(self, item):
+        if item in self.__data.keys():
+            return self.__data[item]
+
+    def text(self):
+        return self.__data['raw']
+
+
 class ModelFile:
     def __init__(self, file_location):
         if not os.path.exists(file_location):
@@ -58,7 +76,7 @@ class ModelFile:
                                           'H_orb', 'H_spin', 'X_3He'],
                                    sep=r"\s+")
 
-            first_line = (contents[0].replace('-', ' -')
+            first_line = (contents[i].replace('-', ' -')
                                      .replace('E -', 'E-')
                                      .split())
 
@@ -75,19 +93,29 @@ class ModelFile:
 
             metadata = dict(zip(keys, first_line))
 
-            self.__models.append({
-                'model': model_df,
-                'delta': delta_df,
-                'metadata': metadata
-                })
+            model = Model(model_df, delta_df, metadata, "".join(data))
+
+            self.__models.append(model)
 
             self.__length += 1
 
     def __len__(self):
         return self.__length
 
+    def request_indexes(self):
+        idxs = np.array([])
+        for i in range(len(self)):
+            idxs = np.append(idxs, self.get(i)['metadata']['NM_start'])
+
+        return idxs.astype(int)
+
     def get(self, index):
         return self.__models[index]
+
+    def get_by_modelnum(self, modelnum):
+        idxs = self.request_indexes()
+        nbr = np.argwhere(idxs == modelnum)[0][0]
+        return self.get(nbr)
 
     def plot(self,
              parameter,

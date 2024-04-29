@@ -239,7 +239,7 @@ class STARSController:
                 data[0] = string
 
                 if boost_max_nmodels:
-                    data[0] = data[0][:94] + " 99999" + data[0][100:]
+                    data[0] = data[0][:94] + " 99999      0" + data[0][107:]
 
                 f.seek(0)
                 f.writelines(data)
@@ -879,7 +879,7 @@ class STARSController:
         with open(modin_location, 'w') as f:
             f.writelines(output)
 
-    def run_default_evolution(self, zams_mass):
+    def run_default_evolution(self, zams_mass, NM2=199):
         """Performs one run from pre-ZAMS until the end of evolution.
         Assumes NORMAL file structure.
 
@@ -893,20 +893,8 @@ class STARSController:
         self.terminal_command("rm modin")
         self.terminal_command("rm data")
 
-        modin_bak = f"../backup_data/modins/modin.bak.z020"
-        modin = pkgutil.get_data(__name__, modin_bak)
-        modin = modin.decode("utf-8")
-
-        with open('modin', 'w') as f:
-            f.write(modin)
-
-        data = kaitiaki.load_file(f"data.bak")
-
-        # Write to file.
-        with open("data", "w") as f:
-            f.write(data)
-
-        self.output("info", "TEST")
+        self.blit()
+        self.load_default_modin()
 
         pre_zams_params = {'IML1': 9,
                            'RML': float(zams_mass),
@@ -914,7 +902,7 @@ class STARSController:
                            'IX': 0,
                            'IY': 0,
                            'IZ': 0,
-                           'NM2': 499,
+                           'NM2': NM2,
                            'NCH': 3,
                            'ISTART': 0}
 
@@ -941,7 +929,7 @@ class STARSController:
                            'IY': 1,
                            'IZ': 1,
                            'ISTART': 1,
-                           'NM2': 499,
+                           'NM2': NM2,
                            'NNMOD': 0}
 
         self.output('status', 'Configuring Parameters')

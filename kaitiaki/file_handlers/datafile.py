@@ -11,6 +11,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import subprocess
+from tabulate import tabulate
 from tqdm import tqdm
 
 import kaitiaki
@@ -35,6 +36,10 @@ class DataFileParser:
     def get(self, param):
         with self as data:
             return data.get(param)
+
+    def elucidate(self, *args, **kwargs):
+        with self as data:
+            return data.elucidate(*args, **kwargs)
 
     def to_pickle(self, path: str = "configuration.params"):
         params = self.as_dict()
@@ -235,17 +240,89 @@ Current Value: {val} ({meaning['options'][val]})
                 else:
                     raise KeyError(f"Parameter {param} not recognised.")
 
-            def elucidate(self, file, elucidate_only=None):
+            def _format_elucidate(self, datadict, fmt, splice_into=2):
+                if fmt == 'plaintext':
+                    res = ''
+                    for key, val in datadict.items():
+                        res += f"[{key}]: {val}\n"
+                else:
+                    # Gotta be a cleaner way to do this...
+                    def format(item):
+                        item = str(item)
+                        item = item.lower()
+
+                        if 'e' in item:
+                            base, mantissa = item.split('e')
+
+                            def num_is(a, b):
+                                if float(a) == int(float(a)):
+                                    if float(a) == float(b):
+                                        return True
+                                return False
+
+                            if num_is(base, 0):
+                                return 0
+                            if num_is(base, 1):
+                                prefix = ''
+                            else:
+                                prefix = f"{base}\\times"
+                            mantissa = int(mantissa)
+                            item = f'${prefix}10^{{{mantissa}}}$'
+                        else:
+                            if float(item) > 1e3 or float(item) < 1e-3:
+                                item = format(f"{Decimal(item):.3E}")
+
+                        return item
+
+                    table = [[k, format(v), ''] for k, v in datadict.items()]
+
+                    new_shape = [int(len(table)//splice_into), 3*splice_into]
+
+                    if new_shape[0]*new_shape[1] < len(table)*3:
+                        new_shape[0] += 1
+
+                        print(f"{len(table)*3=}, target {new_shape[0]*new_shape[1]}")
+
+                        print(new_shape)
+
+                        while len(table)*3 < new_shape[0]*new_shape[1]:
+                            print(f"{len(table)=}")
+                            table.append(['-', '-', '-'])
+
+                        print(table)
+
+                    table = np.reshape(np.array(table), new_shape)
+                    res = tabulate(table,
+                                   headers=['Parameter', 'Value', 'Comment']*splice_into,
+                                   tablefmt='latex_raw',
+                                   colalign=["right", "left", "left"]*splice_into)
+                return res
+
+            def elucidate(self, file, elucidate_only=None,
+                                      fmt='plaintext',
+                                      splice_into=2):
+                error = "`fmt` must be tex or plaintext"
+                assert fmt in ['plaintext', 'tex'], error
+
                 with open(file, 'w') as f:
                     if elucidate_only is None:
                         elucidate_only = kaitiaki.constants.dfile_struct.keys()
 
-                    lines = []
+                    lines = dict()
 
                     for key in elucidate_only:
-                        lines.append(f"[{key.upper()}]: {self.get(key)}\n")
+                        # ISX16-ISX18 fail for... some reason.
+                        if key.lower().startswith('isx'): continue
+                        if key.lower().startswith('nuc'): continue
+                        if key.lower().startswith('evo'): continue
 
-                    f.writelines(lines)
+                        lines[key.upper()] = self.get(key)
+
+                    elucidation = self._format_elucidate(lines,
+                                                         fmt,
+                                                         splice_into)
+
+                    f.writelines(elucidation)
 
             def _write_to_pointer(self, pointer, data, mode):
                 if mode == 'replace':
@@ -328,7 +405,11 @@ Current Value: {val} ({meaning['options'][val]})
                 if num_dp > 0:
                     return float(val)
 
-                return int(val)
+                try:
+                    return int(val)
+                except ValueError as e:
+                    print(f"{param=}")
+                    raise e
 
             def get(self, param):
                 if isinstance(param, list):
