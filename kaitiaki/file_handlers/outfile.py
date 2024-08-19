@@ -1,4 +1,5 @@
 import pprint
+import re
 import tempfile
 
 import numpy as np
@@ -251,8 +252,8 @@ class outfile:
             The first index of the array is the profile number.
         """
         get_data = True
-        if filename.endswith('out2'):
-            with open(filename[:-1], 'r') as f:
+        if filename.split('/')[-1].startswith('out2'):
+            with open(filename.replace('out2', 'out'), 'r') as f:
                 line = f.readline()
 
                 summaries = []
@@ -311,8 +312,15 @@ class outfile:
                     dtypes = [('k', 'int')] + \
                              [(name, 'float') for name in line.split()[1:]]
                     data = [f.readline() for i in range(K+(K-1)//10)]
-                    data = [tuple(map(float, row.split()))
-                            for row in data if row != '\n']
+                    data = [re.sub(r'([0-9])-([0-9])', r'\1E-\2', l) for l in data]
+                    data = [re.sub(r'([0-9])\+([0-9])', r'\1E+\2', l) for l in data]
+
+                    try:
+                        data = [tuple(map(float, row.split()))
+                                for row in data if row != '\n']
+                    except ValueError as e:
+                        print(data)
+                        raise e
                     profiles.append(np.array(data, dtype=dtypes))
 
                     if dtypes not in headers:
@@ -378,9 +386,12 @@ class outfile:
         return self._profiles[idx]
 
     def detailed_profile_history(self):
-        raise NotImplementedError()
-        self.__detailed_idx += 1
-        yield self.detailed_profile(self.__detailed_idx-1)
+        # raise NotImplementedError()
+        # self.__detailed_idx += 1
+        for index in range(len(self._profiles)):
+            yield self.detailed_profile(index)
+        # else:
+        #     raise StopIteration
 
     def __iter__(self):
         self.__counter = 0

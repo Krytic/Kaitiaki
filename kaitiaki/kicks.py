@@ -101,6 +101,14 @@ def __BrayRichards(mej, mrem):
     return 115*mej/mrem+15*(mns/mrem)
 
 
+def __BrayCustom(alpha, beta, mej, mrem):
+    mns = mrem
+    if mrem > 2.5:
+        mns = 1.4
+
+    return alpha*mej/mrem+beta*(mns/mrem)
+
+
 def _get_dist_by_name(dist_name, **kwargs):
     internal_name = f"__{dist_name[0].upper() + dist_name[1:]}"
 
@@ -127,7 +135,11 @@ def sample(dist_name, n_samples, **kwargs):
         dist = _get_dist_by_name(dist_name, **kwargs)
         return dist.rvs(size=n_samples)
     else:
-        if 'mej' in kwargs and 'mrem' in kwargs:
+        can_run = ('mej' in kwargs and 'mrem' in kwargs)
+        if dist_name == 'BrayCustom':
+            can_run = can_run and ('alpha' in kwargs and 'beta' in kwargs)
+
+        if can_run:
             members = inspect.getmembers(sys.modules[__name__])
 
             funcs = [cls_name

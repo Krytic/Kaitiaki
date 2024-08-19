@@ -130,7 +130,7 @@ class ModelFile:
         df = model['model']
         NM2 = int(model['metadata']['NM2'])
 
-        values = transformation('y', df[parameter].to_numpy()[::-1])
+        values = transformation('y', df[parameter][::-1])
         # Reversing index because the dataframes go 1 -> 199
         # (i.e., surface to center), but we want to go center -> surface.
 

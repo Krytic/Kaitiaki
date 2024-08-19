@@ -192,7 +192,9 @@ dfile_struct = {'nm2':       (0, 0, 4),      'icl':       (1, 0, 4),
                 'istart':    (21, 0, 2),     'hkh':       (21, 2, 11),
                 'gff':       (21, 11, 19),   'nnmod':     (21, 19, None),
 
-                'cepr':      (22, 0, 2),     'alphace':   (22, 2, None)
+                'cepr':      (22, 0, 2),     'alphace':   (22, 2, None),
+
+                'ivaracc':   (23, 0, 2),     'imlwr':     (23, 2, None)
                 }
 
 disambiguable = {

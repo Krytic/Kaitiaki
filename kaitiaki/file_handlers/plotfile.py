@@ -4,8 +4,6 @@ from copy import deepcopy
 from decimal import Decimal
 import itertools
 from os import path
-from hoki import load
-from hoki import constants as hoki_constants
 
 import pandas as pd
 import numpy as np
@@ -45,6 +43,7 @@ class plot:
 
         self._data, status = self.parse_plotfile(file, row, dummy_object)
         self._segment_points = []
+        self._filename = file
 
         if status == 'skipped':
             raise OSError("Requested file does not exist")
@@ -61,27 +60,27 @@ class plot:
         return self._data.iloc[0]
 
     def __add__(self, other):
-        if isinstance(other, Plotfile):
+        if isinstance(other, plot):
             if self._allow_pad_age:
-                other.pad_age(self.get('age').to_numpy()[-1])
+                other.pad_age(self.get('age')[-1])
 
             # self._segment_points.append(len(self._data))
             # self._data = self._data.append(other._data)
 
-            new_dataframe = Plotfile('', dummy_object=True)
+            new_dataframe = plot('', dummy_object=True)
             new_dataframe._segment_points.append(len(self._data))
             new_dataframe._data = pd.concat([self._data, other._data],
                                             ignore_index=True)
 
             return new_dataframe
         else:
-            raise TypeError("One of these items isn't a Plotfile object.")
+            raise TypeError("One of these items isn't a plot object.")
 
     def access(self):
         return self._data
 
     def get(self, key):
-        values = self._data[key]
+        values = self._data[key].to_numpy()
         return values
 
     def hr_diagram(self, ax=None, **kwargs):
@@ -169,7 +168,7 @@ class plot:
                   label="CO core mass",
                   ax=ax)
 
-        ZAMS = self.get('M').to_numpy()[0]
+        ZAMS = self.get('M')[0]
 
         if annotate:
             ax.set_title(rf"$M_{{\rm ZAMS}}={ZAMS}M_\odot$ star")
@@ -220,16 +219,16 @@ class plot:
         """
 
         if x_axis == 'collapsetime':
-            age_at_collapse = self.get('age').to_numpy()[-1]
-            current_age = self.get('age').to_numpy()
+            age_at_collapse = self.get('age')[-1]
+            current_age = self.get('age')
 
             time_until_collapse = age_at_collapse - current_age
 
             x_arr = time_until_collapse
         else:
-            x_arr = self.get(x_axis).to_numpy()
+            x_arr = self.get(x_axis)
 
-        y_arr = self.get(y_axis).to_numpy()
+        y_arr = self.get(y_axis)
 
         if transform is not None:
             if callable(transform):
@@ -237,7 +236,7 @@ class plot:
                 y_arr = transform('y', y_arr)
 
         if fix_core_masses and y_axis == 'He_core':
-            M = self.get('M').to_numpy()
+            M = self.get('M')
             if (y_arr != 0).any():
                 mask = np.where(y_arr != 0)[0][-1]
                 if mask + 1 != len(y_arr):
