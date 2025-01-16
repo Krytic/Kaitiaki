@@ -25,6 +25,7 @@ class Model:
         return self.__data['raw']
 
 
+# May be broken
 class ModelFile:
     def __init__(self, file_location):
         if not os.path.exists(file_location):
@@ -111,6 +112,9 @@ class ModelFile:
 
     def get(self, index):
         return self.__models[index]
+
+    def get_by_plotfile_timestep(self, timestep):
+        pass
 
     def get_by_modelnum(self, modelnum):
         idxs = self.request_indexes()

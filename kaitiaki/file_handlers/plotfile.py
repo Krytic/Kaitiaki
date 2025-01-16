@@ -11,6 +11,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import subprocess
 from tqdm import tqdm
+import csv
 
 
 def get_last_line(self, file):
@@ -29,7 +30,7 @@ def get_last_line(self, file):
 
     for i, col in enumerate(c):
         width = spec[i]
-        # Continue writing parser.
+        # TODO: Continue writing parser.
 
 
 class plot:
@@ -37,9 +38,19 @@ class plot:
                  file: str = 'plot',
                  allow_pad_age: bool = True,
                  row: str = 'all',
-                 dummy_object: bool = False):
+                 dummy_object: bool = False,
+                 DEBUG_load_pandas: bool = False):
 
         assert row in ['all', 'last'], "row must be all or last"
+
+        if DEBUG_load_pandas is not False:
+            kaitiaki.debug('warning', ('DEBUG_load_pandas is a bodge '
+                                       'behaviour. It is ONLY in here to '
+                                       'work as a fix for a bug that has '
+                                       'been patched, though some (internal, '
+                                       'unreleased) files were generated '
+                                       'with it. Behaviour is untested!'))
+        self._DEBUG_load_pandas = DEBUG_load_pandas
 
         self._data, status = self.parse_plotfile(file, row, dummy_object)
         self._segment_points = []
@@ -58,6 +69,15 @@ class plot:
 
     def zams(self):
         return self._data.iloc[0]
+
+    def reconstruct(self, path):
+        # This will break the reader...
+        self._data.to_csv(path,
+                          float_format='%16.3f',
+                          sep=" ",
+                          header=False,
+                          quoting=csv.QUOTE_NONE,
+                          index=False)
 
     def __add__(self, other):
         if isinstance(other, plot):
@@ -80,14 +100,28 @@ class plot:
         return self._data
 
     def get(self, key):
-        values = self._data[key].to_numpy()
-        return values
+        if key != 'inverse_age':
+            values = self._data[key].to_numpy()
+            return values
+        else:
+            values = self._data['age'].to_numpy()
+            return values[-1] - values
 
     def hr_diagram(self, ax=None, **kwargs):
         obj = self.plot('log(T)', 'log(L)', ax=ax, **kwargs)
         xlim = obj[0].axes.get_xlim()
         if xlim[0] < xlim[1]:
             obj[0].axes.invert_xaxis()
+
+    def truncate(self, truncate_to):
+        self._data.drop([n for n in range(truncate_to, len(self))],
+                        inplace=True)
+
+        new_dataframe = plot('', dummy_object=True)
+        new_dataframe._segment_points.append(len(self._data))
+        new_dataframe._data = self._data
+
+        return new_dataframe
 
     def kippenhahn_diagram(self,
                            distinguish_envelopes: bool = False,
@@ -323,11 +357,20 @@ class plot:
 
             if not is_dummy:
                 if row == 'all':
-                    df = pd.read_fwf(fname,
-                                     names=c,
-                                     # widths=spec
-                                     infer_nrows=99999,
-                                     )
+                    if self._DEBUG_load_pandas:
+                        # Don't use! This is to work around a patched bug
+                        df = pd.read_csv(fname,
+                                         names=['index', *c],
+                                         header=0,
+                                         sep=r'\s+',
+                                         index_col=0,
+                                         dtype=float)
+                    else:
+                        df = pd.read_fwf(fname,
+                                         names=c,
+                                         # widths=spec
+                                         infer_nrows=99999,
+                                         )
                 else:
                     from file_read_backwards import FileReadBackwards
 

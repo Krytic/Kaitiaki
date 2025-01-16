@@ -465,7 +465,9 @@ class outfile:
                                     fidelity: int = 100,
                                     span: tuple = (None, None),
                                     make_cbar: bool = True,
-                                    figsize=None):
+                                    figsize=None,
+                                    transform=lambda x: x,
+                                    ax=None):
 
         assert mode.lower() in ['2d', '3d'], 'mode must be 2d or 3d.'
         assert nrows > 0, 'nrows must be positive.'
@@ -482,11 +484,40 @@ class outfile:
         Y = meshpoints
         XX, YY = np.meshgrid(X, Y, indexing='ij')
 
-        fig = plt.figure(figsize=figsize)
+        results = transform(results)
 
-        if mode == '2d':
-            ax = fig.add_subplot(nrows, ncols, 1)
+        if ax is None:
+            fig = plt.figure(figsize=figsize)
 
+            if mode == '2d':
+                ax = fig.add_subplot(nrows, ncols, 1)
+
+                if span == (None, None):
+                    span = (results.min(), results.max())
+
+                levels = np.linspace(span[0], span[1], fidelity)
+
+                cmap = ax.contourf(XX, YY, results, cmap=cm.bwr,
+                                   levels=levels)
+
+                ax.set_xlabel('Model Number')
+                ax.set_ylabel('Meshpoint Number')
+
+                if make_cbar:
+                    cbar = fig.colorbar(cmap)
+                    cbar.set_label(param)
+            else:
+                ax = fig.add_subplot(nrows, ncols, 1, projection='3d')
+
+                surf = ax.plot_surface(XX, YY, results, cmap=cm.bwr,
+                                       linewidth=0, antialiased=False)
+
+                ax.set_xlabel('Model Number')
+                ax.set_ylabel('Meshpoint Number')
+                ax.set_zlabel(param)
+
+            return fig
+        else:
             if span == (None, None):
                 span = (results.min(), results.max())
 
@@ -495,23 +526,9 @@ class outfile:
             cmap = ax.contourf(XX, YY, results, cmap=cm.bwr,
                                levels=levels)
 
+            ax.set_title(param)
             ax.set_xlabel('Model Number')
             ax.set_ylabel('Meshpoint Number')
-
-            if make_cbar:
-                cbar = fig.colorbar(cmap)
-                cbar.set_label(param)
-        else:
-            ax = fig.add_subplot(nrows, ncols, 1, projection='3d')
-
-            surf = ax.plot_surface(XX, YY, results, cmap=cm.bwr,
-                                   linewidth=0, antialiased=False)
-
-            ax.set_xlabel('Model Number')
-            ax.set_ylabel('Meshpoint Number')
-            ax.set_zlabel(param)
-
-        return fig
 
 
 class outfile2(outfile):

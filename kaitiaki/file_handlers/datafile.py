@@ -408,8 +408,7 @@ Current Value: {val} ({meaning['options'][val]})
                 try:
                     return int(val)
                 except ValueError as e:
-                    print(f"{param=}")
-                    raise e
+                    raise ValueError(f"Failed to parse parameter {param=}")
 
             def get(self, param):
                 if isinstance(param, list):

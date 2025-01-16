@@ -360,6 +360,8 @@ class STARSController:
 
         self.configure_parameters(params)
 
+    # TODO: I have to make this fix the period if you set a single star
+    # after a binary run
     def setup_single_evolution(self, dfile='data'):
         """
         Modifies data to allow for single star evolution. Sets the following
@@ -413,6 +415,58 @@ class STARSController:
 
         self.setup_single_evolution(dfile=self._datafile)
         self.configure_parameters(params)
+
+    def setup_evolution(self, mode='single', iml_option=5):
+        match mode:
+            case 'single':
+                self.setup_single_evolution()
+                IML1 = iml_option
+                IML2 = 0
+            case 'binary':
+                self.setup_binary_evolution()
+                IML1 = iml_option
+                IML2 = iml_option
+            case _:
+                error_message = (f"mode must be 'single' or 'binary', "
+                                 f"not '{mode}'.")
+
+                raise ValueError(error_message)
+
+        self.configure_parameters({
+            'IX': 1,
+            'IY': 1,
+            'IZ': 1,
+            'ITH': 1,
+            'ISTART': 1,
+            'IML1': IML1,
+            'IML2': IML2
+            })
+
+    def relax_model(self):
+        self.output('status', "Relaxing current modin...")
+
+        data = kaitiaki.file.data(self._datafile)
+
+        self.setup_single_evolution()
+
+        old_params = data.get(['IML1', 'IML2', 'ITH', 'IX', 'IY', 'IZ', 'NWRT1'])
+
+        self.configure_parameters({
+            'IML1': 0,
+            'IML2': 0,
+            'ITH': 0,
+            'IX': 0,
+            'IY': 0,
+            'IZ': 0,
+            'NWRT1': 1,
+            'ISTART': 1
+            })
+
+        self.run()
+
+        self.configure_parameters(old_params)
+
+        self.output('status', 'Model relaxed. It is in modout -- use modout_to_modin() to load it for the next run.')
 
     def set_output_directory(self, directory):
         """Sets up the output directory.

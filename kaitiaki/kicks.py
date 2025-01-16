@@ -109,6 +109,23 @@ def __BrayCustom(alpha, beta, mej, mrem):
     return alpha*mej/mrem+beta*(mns/mrem)
 
 
+def __HobbsSpeedy(size):
+    sig = 265
+    pdf = lambda v: np.sqrt(2/np.pi) * v**2 / sig**3 * np.exp(-v**2/(2*sig**2))
+    xbounds = (0, 2000)
+    pmax = pdf(np.linspace(*xbounds, 1000)).max()
+
+    res = np.array([])
+    for _ in range(size):
+        while True:
+            x = np.random.rand(1)*(xbounds[1]-xbounds[0])+xbounds[0]
+            y = np.random.rand(1)*pmax
+            if y <= pdf(x):
+                res = np.append(res, x)
+                break
+    return res
+
+
 def _get_dist_by_name(dist_name, **kwargs):
     internal_name = f"__{dist_name[0].upper() + dist_name[1:]}"
 
@@ -132,8 +149,19 @@ def _get_dist_by_name(dist_name, **kwargs):
 
 def sample(dist_name, n_samples, **kwargs):
     if not dist_name.startswith("Bray"):
-        dist = _get_dist_by_name(dist_name, **kwargs)
-        return dist.rvs(size=n_samples)
+        try:
+            dist = _get_dist_by_name(dist_name, **kwargs)
+            return dist.rvs(size=n_samples)
+        except (AttributeError, ValueError):
+            members = inspect.getmembers(sys.modules[__name__])
+
+            funcs = [cls_name
+                     for cls_name, cls_obj in members
+                     if inspect.isfunction(cls_obj) and cls_name[:2] == "__"]
+
+            dist = getattr(sys.modules[__name__], f'__{dist_name}')
+
+            return dist(size=n_samples)
     else:
         can_run = ('mej' in kwargs and 'mrem' in kwargs)
         if dist_name == 'BrayCustom':
