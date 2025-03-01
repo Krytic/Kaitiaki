@@ -49,6 +49,7 @@ class DataFileParser:
 
     def explain(self, param):
         val = self.get(param)
+        param = param.lower()
         if param in kaitiaki.constants.disambiguable:
             meaning = kaitiaki.constants.disambiguable[param]
 
@@ -69,6 +70,9 @@ Current Value: {val} ({meaning['options'][val]})
             """
 
             print(disambiguation)
+        else:
+            kaitiaki.debug('info',
+                           f'Parameter {param} not disambiguable. Check the manual.')
 
     def show_in_file(self, param):
         param = param.lower()

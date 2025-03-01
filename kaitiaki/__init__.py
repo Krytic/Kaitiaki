@@ -50,7 +50,6 @@ import kaitiaki.STARSController as STARS
 import kaitiaki.helpers as helpers
 import kaitiaki.constants as constants
 import kaitiaki.classifier as classify
-import kaitiaki.OptionLexer as lexer
 import kaitiaki.kicks as kicks
 import kaitiaki.sntools as sntools
 
@@ -83,7 +82,8 @@ def load_file(filename):
     if '..' in filename:
         raise ValueError("Traversing up the filetree is not permitted.")
 
-    allowed_folders = ['data.bak', 'COtables', 'dat', 'modins']
+    allowed_folders = ['data.bak', 'COtables', 'dat',
+                       'modins', 'pseudo_evolution']
 
     for folder in allowed_folders:
         if filename.startswith(folder):
@@ -155,10 +155,3 @@ def debug(msgtype, message, fatal=False):
 
 def deprecate(func):
     return log.deprecate(func)
-
-
-def run(lexer):
-    STARS = kaitiaki.STARS.STARSController()
-
-    for options in lexer:
-        STARS.configure_parameters(options)

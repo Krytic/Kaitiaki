@@ -212,6 +212,8 @@ disambiguable = {
                 3: 'Vassiliadis & Wood',
                 4: 'Wolf-Rayet',
                 5: 'Wolf-Rayet (with bugfixes)',
+                6: 'Wolf-Rayet (slow-turnon)',
+                7: 'Wolf-Rayet (no-turnon)',
                 9: 'Eldridge-Richards (targeting)'
                }
              },
@@ -223,6 +225,8 @@ disambiguable = {
                 3: 'Vassiliadis & Wood',
                 4: 'Wolf-Rayet',
                 5: 'Wolf-Rayet (with bugfixes)',
+                6: 'Wolf-Rayet (with bugfixes)',
+                7: 'Wolf-Rayet (with bugfixes)',
                 9: 'Eldridge-Richards (targeting)'
                }
              },

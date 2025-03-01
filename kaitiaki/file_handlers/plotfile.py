@@ -109,7 +109,9 @@ class plot:
 
     def hr_diagram(self, ax=None, **kwargs):
         obj = self.plot('log(T)', 'log(L)', ax=ax, **kwargs)
+
         xlim = obj[0].axes.get_xlim()
+
         if xlim[0] < xlim[1]:
             obj[0].axes.invert_xaxis()
 
@@ -205,7 +207,7 @@ class plot:
         ZAMS = self.get('M')[0]
 
         if annotate:
-            ax.set_title(rf"$M_{{\rm ZAMS}}={ZAMS}M_\odot$ star")
+            ax.set_title(rf"$M_{{\rm ZAMS}}={ZAMS}~\text{{M}}_\odot$ star")
             ax.set_xlabel(x_label)
             ax.set_ylabel(r'Mass co-ordinate')
 

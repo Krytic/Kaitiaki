@@ -104,8 +104,7 @@ def _custom_subprocess_handler(command, timeout=5*60, cwd=None):
         try:
             # SMR: this allows us to run in the subprocess in a different dir
             if cwd is not None:
-                for d in cwd.split(os.sep):
-                    os.chdir(d)
+                os.chdir(cwd)
             # end SMR
             stdout, stderr = process.communicate(None, timeout=timeout)
         except subprocess.TimeoutExpired as exc:

@@ -172,9 +172,6 @@ class STARSController:
         self._run_bs_location = run_bs
         self._datafile = "data"
 
-        self._options = None
-        self._lexicon = None
-
     def blit(self, ZS='z020', directory='.'):
         """Blits the directory given by creating the COTables and data file.
 
@@ -245,16 +242,6 @@ class STARSController:
                 f.writelines(data)
                 f.truncate()
 
-    def use_lexicon(self, lexicon):
-        lexer = kaitiaki.lexer.Lexer(lexicon)
-
-        options = lexer.fetch_lexicon()
-
-        self._options = options['options']
-        self._lexicon = {k: v for k, v in options.items() if k != 'options'}
-
-        print(self._lexicon)
-
     def update_datafile(self, new_location):
         self._datafile = new_location
 
@@ -285,6 +272,8 @@ class STARSController:
 
             file.write("\n".join(modin))
 
+    # TODO: Fix (dir isn't changed correctly and this will also
+    # probably not actually put the file anywhere
     def generate_datafile(self, loc):
         dfile = self.fetch_datafile()
         wd = os.getcwd()
@@ -502,91 +491,33 @@ class STARSController:
         Returns:
             tuple -- The output from run() above.
         """
-        if self._options is None:
-            wd = os.getcwd()
+        wd = os.getcwd()
 
-            if cwd is not None:
-                for d in cwd.split("/"):
-                    os.chdir(d)
+        if cwd is not None:
+            os.chdir(cwd)
 
-            self.commit_parameters()
+        self.commit_parameters()
 
-            if time_me:
-                time_start = time.time_ns()
+        if time_me:
+            time_start = time.time_ns()
 
-            cmd = f'{self._run_bs_location}/run_bs'
+        cmd = f'{self._run_bs_location}/run_bs'
 
-            out, err, reason = self.terminal_command(cmd,
-                                                     timeout=timeout,
-                                                     warn=warn)
+        out, err, reason = self.terminal_command(cmd,
+                                                 timeout=timeout,
+                                                 warn=warn)
 
-            if time_me:
-                time_end = time.time_ns()
+        if time_me:
+            time_end = time.time_ns()
 
-                delta_time = time_end - time_start
+            delta_time = time_end - time_start
 
-            os.chdir(wd)
+        os.chdir(wd)
 
-            if time_me:
-                return out, err, reason, delta_time
-            else:
-                return out, err, reason
+        if time_me:
+            return out, err, reason, delta_time
         else:
-            out_dir = self._options['output_directory']
-            if not os.path.exists(out_dir):
-                self.terminal_command(f"mkdir {out_dir}")
-
-            if 'ZS' in self._lexicon[0].keys():
-                Z = self._lexicon[0]['ZS']
-            else:
-                Z = 0.020
-
-            Z = kaitiaki.format_metallicity(Z)
-
-            data  = kaitiaki.load_file(f"data.bak")
-
-            with open('data', 'w') as file:
-                file.write(data)
-
-            wd = os.getcwd()
-
-            if cwd is not None:
-                for d in cwd.split("/"):
-                    os.chdir(d)
-
-            if self._options['is_binary']:
-                istar = ['', '2']
-            else:
-                istar = ['']
-
-            # Now begin user iterations
-
-            for i in range(len(self._lexicon.keys())):
-                self.terminal_command(f"mkdir {out_dir}/{i}")
-                this_run = self._lexicon[i]
-
-                self.configure_parameters(this_run)
-                self.commit_parameters()
-
-                cmd = f'{self._run_bs_location}/run_bs'
-                out, err, reason = self.terminal_command(cmd, timeout=timeout)
-
-                if reason != 'finished':
-                    with open('stderr.debug', 'w') as f:
-                        f.write(err)
-
-                    raise ChildProcessError(f'Iteration {i} didn\'t complete. Reason: {reason}. stderr has been dumped to stderr.debug.')
-
-                files = ['out', 'plot', 'sneplot', 'modout', 'nucmodout']
-
-                for file in files:
-                    for I in istar:
-                        self.terminal_command(f'cp {file}{I} {out_dir}/{i}/{file}{I}')
-
-                for I in istar:
-                    self.modout_to_modin(f'modout{I}', f'modin{I}')
-
-            os.chdir(wd)
+            return out, err, reason
 
     def get_last_converged_model(self, file, as_obj=False):
         from file_read_backwards import FileReadBackwards
@@ -600,7 +531,7 @@ class STARSController:
             for line in frb:
                 while len(q) > 8:
                     q.pop(0)
-                q.append(l)
+                q.append(line)
                 if 'dt/age/MH/MHe' in line.strip():
                     break
 
@@ -830,7 +761,7 @@ class STARSController:
             'IY': 0,             # Helium burning off
             'IZ': 0,             # Metal burning off
             'NCH': 1,
-            'ISTART': 0,         # Don't reset age, dt, nmod,
+            'ISTART': 1,         # Don't reset age, dt, nmod,
             'NNMOD': new_model_number
         }
 
