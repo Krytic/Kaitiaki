@@ -1,5 +1,6 @@
 from copy import deepcopy
 from decimal import Decimal
+import threading
 
 import multiprocessing as mp
 import os
@@ -11,6 +12,7 @@ import traceback
 import zipfile
 
 import matplotlib
+import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -485,16 +487,230 @@ class STARSController:
             for param, val in self._params.items():
                 dfile.set(param, val)
 
-    def run(self, timeout=5*60, cwd=None, warn=True, time_me=False):
+    def get_binary_mode(self, path):
+        with kaitiaki.file.data(f"{path}/data") as data:
+            IS_BINARY = bool(int(data.get('imode'))-1)
+        return IS_BINARY
+
+    def live_hr_diagram(self, the_dir, compute_thread, fps=60):
+        path = os.path.realpath(the_dir)
+        IS_BINARY = self.get_binary_mode(path)
+
+        old_params = plt.rcParams
+        params = {'text.color': '(0.2,0.2,0.2)',
+                  'axes.edgecolor': '(0.1,0.1,0.1)',
+                  'axes.labelcolor': '(0.1,0.1,0.1)',
+                  'axes.linewidth': '1',
+                  'axes.spines.top': 'True',
+                  'axes.spines.right': 'True',
+                  'axes.spines.bottom': 'True',
+                  'axes.spines.left': 'True',
+                  'axes.grid': 'True',
+                  'grid.alpha': '0.7',
+                  'grid.linestyle': '--',
+                  'grid.linewidth': '0.6',
+                  'axes.prop_cycle': "cycler('color', ['EE6123', '3185FC', 'F49CBB', '694A38', 'FDCA40', '26C485', 'A3E7FC', '32908F', '553A41', '2F0601', '50514F', 'FFE066', '247BA0', '70C1B3'])",
+                  'lines.linewidth': '1.5',
+                  'lines.markeredgewidth': '0.0',
+                  'scatter.marker': '.',
+                  'xtick.color': '(0.2,0.2,0.2)',
+                  'xtick.direction': 'in',
+                  'ytick.color': '(0.2,0.2,0.2)',
+                  'ytick.direction': 'in',
+                  'xtick.top': 'True',
+                  'xtick.bottom': 'True',
+                  'ytick.left': 'True',
+                  'ytick.right': 'True',
+                  'xtick.minor.visible': 'True',
+                  'ytick.minor.visible': 'True',
+                  'font.family': 'serif',
+                  'font.serif': 'CMU Serif',
+                  'font.sans-serif': 'CMU Sans Serif',
+                  'mathtext.fontset': 'cm',
+                  'mathtext.default': 'sf',
+                  'figure.labelsize': 'large',
+                  'figure.titlesize': 'large',
+                  'font.size': 12.0,
+                  'xtick.labelsize': 'medium',
+                  'ytick.labelsize': 'medium'}
+
+        plt.rcParams.update(params)
+
+        def get_quantity(dataArray, column_number):
+            returnable = []
+
+            for eachLine in dataArray:
+                if len(eachLine) > 1:
+                    line_parts = eachLine.split()
+
+                    quantity = line_parts[column_number].strip()
+
+                    try:
+                        if column_number == 0:
+                            quantity = int(quantity)
+                        else:
+                            quantity = float(quantity)
+
+                        returnable.append(quantity)
+                    except ValueError:
+                        returnable.append(np.nan)
+
+            return returnable
+
+        do_limits = False
+
+        for j, fname in enumerate(['plot', 'plot2']):
+            try:
+                full_fname = f"{path}/{fname}"
+                with open(full_fname, "r") as file:
+                    file_data = file.read()
+            except FileNotFoundError:
+                continue
+
+            dataArray = file_data.split('\n')
+
+        hrd_figure = plt.figure(figsize=(12, 12))
+
+        ax = hrd_figure.add_subplot(111)
+
+        hr_axis = ax  # HR Diagram
+
+        hr_axis.grid(True)
+
+        def format_age(age):
+            returned_age = None
+            if age < 1e3:
+                returned_age = f"{age:.3f} years"
+            if age <= 1:
+                returned_age = f"{age*365.25:.3f} days"
+            if age <= 1/365.25:
+                returned_age = f"{age*365*24:.3f} hours"
+            if age <= 1/(365.25*24):
+                returned_age = f"{age*365*24*24:.3f} minutes"
+            if age <= 1/(365.25*24*24):
+                returned_age = f"{age*365*24*24*60:.3f} seconds"
+            if age >= 1e3:
+                returned_age = f"{age/1e3:.3f} kyr"
+            if age >= 1e6:
+                returned_age = f"{age/1e6:.3f} Myr"
+            if age >= 1e9:
+                returned_age = f"{age/1e9:.3f} Gyr"
+            if age >= 1e12:
+                returned_age = f"{age/1e12:.3f} Tyr"
+            if age < 0:
+                returned_age = f"-{format_age(np.abs(age))}"
+
+            return returned_age
+
+        def animate(i):
+            nonlocal IS_BINARY, compute_thread, old_params, hrd_figure
+
+            if not compute_thread.is_alive():
+                # Computation finished -- kill this process!
+                plt.rcParams.update(old_params)
+                plt.close(hrd_figure)
+                raise StopIteration
+
+            ax.clear()
+
+            def RL(q, a):
+                return a * 0.49 * q**(2/3) / (0.6*q**(2/3) + np.log(1+q**(1/3)))
+
+            def RL2(q, a):
+                # https://ui.adsabs.harvard.edu/#abs/2016A&A...588A..50M/abstract
+                return (1+0.299*np.arctan(1.849*q**0.397)*q**0.520) * RL(q, a)
+
+            cs = ['purple', 'skyblue']
+            labels = ['Primary', 'Secondary']
+
+            models = [0]  # to block the legend on first run.
+
+            for j, fname in enumerate(['plot', 'plot2']):
+                try:
+                    with open(f"{path}/{fname}", "r") as file:
+                        file_data = file.read()
+                except FileNotFoundError:
+                    continue
+
+                dataArray = file_data.split('\n')
+
+                temperature = get_quantity(dataArray, 3)
+                luminosity = get_quantity(dataArray, 4)
+                models = get_quantity(dataArray, 0)
+                ages = get_quantity(dataArray, 1)
+                age = format_age(ages[-1])
+
+                if len(temperature) < 10:
+                    # Probably a new run
+                    IS_BINARY = self.get_binary_mode(path)
+
+                if IS_BINARY:
+                    suffix = "Binary"
+                else:
+                    suffix = "Single"
+
+                if len(ages) > 2:
+                    dt = format_age(ages[-1] - ages[-2])
+                else:
+                    dt = format_age(ages[-1])
+
+                title = f"""Evolution mode: {suffix}
+Model Number {models[-1]}
+Current Age: {age}
+dt: {dt}"""
+
+                hr_axis.text(0.01, 0.99, title,
+                             ha='left',
+                             va='top',
+                             transform=hr_axis.transAxes,
+                             fontsize=14)
+
+                hr_axis.plot(temperature, luminosity, c=cs[j], label=labels[j])
+
+                hr_axis.scatter(temperature[::1000], luminosity[::1000],
+                                marker='o',
+                                edgecolors='orange',
+                                facecolors='none')
+
+                hr_axis.set_xlabel(r"$\log~\mathrm{T}_\text{eff}~/~\text{K}$")
+                hr_axis.set_ylabel(r"$\log~\mathrm{L}~/~\text{L}_\odot$")
+
+            if models[-1] > 0:
+                hr_axis.legend(frameon=False)
+
+            if do_limits:
+                hr_axis.set_xlim(4.7, 3.5)
+                hr_axis.set_ylim(3.5, 6.0)
+            else:
+                if hr_axis.get_xlim()[0] < hr_axis.get_xlim()[1]:
+                    hr_axis.axes.invert_xaxis()
+
+        try:
+            ani = animation.FuncAnimation(hrd_figure, animate,
+                                          repeat=False,
+                                          interval=1000/fps)
+            plt.show()
+        except StopIteration:
+            return
+
+    def run(self,
+            timeout=5*60,
+            cwd=None,
+            warn=True,
+            time_me=False,
+            with_live_HR=False,
+            HRD_fps=60):
         """Runs ./run_bs
 
         Returns:
             tuple -- The output from run() above.
         """
         wd = os.getcwd()
+        dirname = wd
 
         if cwd is not None:
             os.chdir(cwd)
+            dirname = cwd
 
         self.commit_parameters()
 
@@ -503,21 +719,39 @@ class STARSController:
 
         cmd = f'{self._run_bs_location}/run_bs'
 
-        out, err, reason = self.terminal_command(cmd,
-                                                 timeout=timeout,
-                                                 warn=warn)
+        if with_live_HR:
+            ###
+            # Known bug:
+            # This will cause the code to segfault.
+            ###
 
-        if time_me:
-            time_end = time.time_ns()
+            # Main thread owns the HRD, background thread owns stars.
 
-            delta_time = time_end - time_start
-
-        os.chdir(wd)
-
-        if time_me:
-            return out, err, reason, delta_time
+            compute = threading.Thread(target=self.terminal_command,
+                                       name="AotearoaSTARS",
+                                       args=(cmd, timeout, dirname, warn))
+            compute.start()
+            try:
+                self.live_hr_diagram(dirname, compute, fps=HRD_fps)
+            except AttributeError:
+                pass  # It throws an attributeerror when it stops...
+                      # for some reason.
         else:
-            return out, err, reason
+            out, err, reason = self.terminal_command(cmd,
+                                                     timeout=timeout,
+                                                     warn=warn)
+
+            if time_me:
+                time_end = time.time_ns()
+
+                delta_time = time_end - time_start
+
+            os.chdir(wd)
+
+            if time_me:
+                return out, err, reason, delta_time
+            else:
+                return out, err, reason
 
     def get_last_converged_model(self, file, as_obj=False):
         from file_read_backwards import FileReadBackwards
@@ -671,7 +905,7 @@ class STARSController:
 
 # our pre-generated 3Msun model starts at NMOD=5000.
             mod_nums = {int(mod[0]) for mod in models if near(mod[2], he_mass)}
-            new_model_number = min(mod_nums) - 5000
+            new_model_number = min(mod_nums)# - 5000
 
             self.output("status", f"He Core Mass required: {he_mass}")
         except ValueError:
@@ -685,9 +919,6 @@ class STARSController:
                               f"The requested model mass was "
                               f"{target_mass} Msun."))
 
-        # required_mass = models.get_by_modelnum(new_model_number).get('MH')
-        required_mass = models[new_model_number][3][1]
-
         self.output("status", "Loading the shipped modout file. This is 1.5GB so it may take a second!")
 
         # Extract this model, write it to modin.
@@ -695,7 +926,6 @@ class STARSController:
         # self.output("status", "File loaded.")
 
         from backup_data import pseudo_evolution as resources
-
         modout = pkg_resources.open_text(resources, 'modout')
 
         self.output("status", "Determining the relevant model...")
@@ -733,7 +963,7 @@ class STARSController:
         self.output('status', (f"Inferred required model number from "
                                f"pre-generated 3Msun star: {new_nmod}"))
 
-        new_model_number = modelblock[0].strip().split()[0]
+        new_model_number = int(modelblock[0].strip().split()[0])# - 5000
 
         self.output('status', (f"New model number from the out file you "
                                f"just ran: {new_model_number} (should be "
