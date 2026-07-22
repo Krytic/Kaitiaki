@@ -18,6 +18,14 @@ import kaitiaki
 
 
 class DataFileParser:
+    """Representation of a datafile object
+
+    IMPORTANT NOTE:
+        The parser only allows read-only operations if not used as a
+        context manager. This is intentional design to limit the risk
+        of conflicting write operations, and to ensure that the file is
+        correctly closed after it is written to.
+    """
     def __init__(self, file_pointer='data'):
         """Parses a datafile. Must be used as a context manager:
 
@@ -28,28 +36,95 @@ class DataFileParser:
         comparison dunder methods are available.
 
         Keyword Arguments:
-            file_pointer {str} -- The location of the datafile
-                                  (default: {'data'})
+            file_pointer (str): The location of the datafile
+                                (default: 'data')
         """
         self._file = file_pointer
 
-    def get(self, param):
+    def get(self, param: str):
+        """Retrieve a parameter from the datafile.
+
+        Retrieves a parameter by name from the datafile, and returns the value.
+        Syntactic sugar for the Parser::data subclass.
+
+        Args:
+            param (str): The parameter we wish to retrieve. Must be a named
+                         parameter that exists in the datafile.
+
+        Returns:
+            mixed: The parameter requested. This is returned as a float if the
+                   parameter is float-like in the datafile, and an int otherwise.
+
+        Raises:
+            ValueError: if the parameter does not exist in the datafile.
+        """
         with self as data:
             return data.get(param)
 
     def elucidate(self, *args, **kwargs):
+        """Generate a report of all of the parameters in the data file as
+        key-value pairs.
+
+        Creates a file with key: value pairs of parameters. This file is
+        intended to be human-readable rather than machine-readable (you
+        should be using the raw datafile for machine-readable methods
+        anyways).
+
+        Args:
+            file (str): The file to output the elucidation to.
+
+        Keyword Args:
+            eludicate_only (list): A list of parameters to elucidate. If
+                                   None, then all parameters in the datafile
+                                   will be elucidated. (default: None)
+
+            fmt (str): The file format to elucidate (either `tex` or
+                       `plaintext`). `tex` creates a booktabs table to be
+                       pasted into a TeX document, whereas `plaintext` is
+                       just a list of key-value pairs.
+
+            splice_into (int): An integer representing how many column-pairs
+                               to splice the list into if we are printing a
+                               tex'd table. For instance, splice_int0=2 gives
+                               a table like:
+                               Parameter | Value | Comment | Parameter | Value | Comment |
+        """
         with self as data:
             return data.elucidate(*args, **kwargs)
 
     def to_pickle(self, path: str = "configuration.params"):
+        """Writes the datafile to a pickle
+
+        As description.
+
+        Args:
+            path (str): The path to write the pickle to. (default:
+            "configuration.params"`)
+        """
         params = self.as_dict()
 
         with open(path, 'wb') as handle:
             pickle.dump(params, handle)
 
-    def explain(self, param):
+    def explain(self, param: str):
+        """Disambiguates a parameter.
+
+        Given a parameter, if possible, return a human-readable description
+        of the parameter, including options. This is intended as an interactive
+        diagnostic for any runs of kaitiaki which are interactive or are
+        otherwise non-clustered.
+
+        Args:
+            param (str): The parameter to disambiguate.
+
+        Notes:
+            Writes to standard output, either through the debugger (if the
+            parameter cannot be disambiguated) or through the print statement
+            (if the parameter *can* be disambiguated).
+        """
         val = self.get(param)
         param = param.lower()
+
         if param in kaitiaki.constants.disambiguable:
             meaning = kaitiaki.constants.disambiguable[param]
 
@@ -75,6 +150,22 @@ Current Value: {val} ({meaning['options'][val]})
                            f'Parameter {param} not disambiguable. Check the manual.')
 
     def show_in_file(self, param):
+        """Shows a highlighted value in the datafile at stdout.
+
+        Reprints faithfully the contents of the datafile, with a given
+        parameter highlighted in bright green (as per colorama).
+
+        Args:
+            param (str): The parameter to show
+
+        Raises:
+            KeyError: If the parameter does not exist in the datafile
+
+        Notes:
+            Prints a rather large amount of text to stdout, including text
+            highlighted with colorama (in the form
+            f"{Fore.GREEN}{Style.BRIGHT}{string}{Style.RESET_ALL}").
+        """
         param = param.lower()
         if param not in kaitiaki.constants.dfile_struct.keys():
             raise KeyError('Invalid parameter')
@@ -82,28 +173,60 @@ Current Value: {val} ({meaning['options'][val]})
         with self as data:
             # Now we're cooking
             colorama.init()
+            # Find where in the datafile the parameter is:
             row_loc, start, finish = kaitiaki.constants.dfile_struct[param]
             substr = data._contents[row_loc][start:finish]
 
+            # substr is now the contents of the datafile at the parameter
+            # location (i.e., the value we want to highlight)
+
             infos = kaitiaki.constants.dfile_struct.values()
-            j = max([info[0] for info in infos])  # Get the max row number
+            j = max([info[0] for info in infos])
+            # j is the maximum row number we need to print to to represent
+            # the contents of the datafile (as we do not need to print
+            # commentary that may come after the "important" parts of the
+            # file)
 
             def hl(string):
+                """Highlights a string using colorama.
+
+                Args:
+                    string (str): The string to highlight
+
+                Returns:
+                    str: The highlighted string, (in bright green)
+                """
                 return Fore.GREEN + Style.BRIGHT + string + Style.RESET_ALL
 
             for i, row in enumerate(data._contents):
+                # for each line...
                 if i > j:
+                    # ... are we past the meaningful bit? If so, stop.
                     break
-                if i != row_loc:
-                    print(row)
-                else:
+
+                if i == row_loc:
+                    # ...does this row contain the string we are looking for?
                     if finish is None:
+                        # ... and is the string at the end of the line?
                         end = ''
                     else:
                         end = row[finish:]
+
+                    # ... if it is in this row, print the highlighted string
                     print(row[:start] + hl(substr) + end)
+                else:
+                    # ...otherwise, just print the regular row.
+                    print(row)
 
     def as_dict(self):
+        """Fetches the entire datafile as a dictionary
+
+        Returns a dictionary of {key: value} pairs representing the entries
+        in the datafile.
+
+        Returns:
+            dict: THe dictionary containing the entries in the datafile.
+        """
         keys = list(kaitiaki.constants.dfile_struct.keys())
 
         return self.get(keys)
@@ -115,6 +238,25 @@ Current Value: {val} ({meaning['options'][val]})
         return my_values == other_val
 
     def changes_from_base(self):
+        """Determine the changes between the current instance of the datafile
+        and the default one.
+
+        Runs a simple comparator of the present datafile against the default
+        one that kaitiaki ships with.
+
+        Returns:
+            dict: A dictionary containing the mismatches for a given parameter.
+
+        Notes:
+            Consider a datafile where the only changes from base are that
+            PARAM_A is set to 7 instead of 3, and PARAM_B is set to 3.4 instead
+            of 3.0. Then the returned dictionary looks like:
+
+            >>> {
+            >>>     'PARAM_A': {'current': 7, 'base': 3}
+            >>>     'PARAM_B': {'current': 3.4, 'base': 3.0}
+            >>> }
+        """
         base_dfile_contents = kaitiaki.load_file('data.bak')
 
         # I hate this implementation -- better to get a path to data.bak
@@ -140,10 +282,27 @@ Current Value: {val} ({meaning['options'][val]})
         return mismatches
 
     def __str__(self):
+        """Returns the original string representation of the data file"""
         with self as data:
             return '\n'.join(data._contents)
 
     def compare(self, other, tag_names=('other', 'self')):
+        """Compare two datafiles against each other.
+
+        Element-wise comparison between two data files. The datafiles will be
+        returned in a format (assuming default parameters, and that PARAM_A is
+        4 in self and 5 in other):
+
+        >>> {'PARAM_A': 'self': 4, 'other': 5}
+
+        Args:
+            other (DataFileParser): The comparative datafile
+            tag_names (tuple): The names to assign the datafiles
+                               (default: `('other', 'self')`)
+
+        Returns:
+            dict: The mismatches in the datafiles.
+        """
         mismatches = dict()
 
         for key in kaitiaki.constants.dfile_struct.keys():
@@ -157,6 +316,7 @@ Current Value: {val} ({meaning['options'][val]})
         return mismatches
 
     def __enter__(self):
+        """Entry method for the DataFileParser as a context manager."""
         class Parser():
             def __init__(self, file_pointer):
                 self._datafile = file_pointer
@@ -169,34 +329,72 @@ Current Value: {val} ({meaning['options'][val]})
                 return "\n".join(self._contents)
 
             def set_from_pickle(self, path):
+                """Configures a datafile from a given pickle.
+
+                Given a pickled file, set all of the parameters in the pickle
+                as parameters in the datafile. Designed to be an interoperable
+                way of translating datafiles across projects.
+
+                Args:
+                    path (str): The path to the pickle to load.
+                """
                 with open(path, 'rb') as handle:
                     params = pickle.load(handle)
 
                 self.set(params)
 
             def _check_scientific_notation(self, param):
+                """Utility method: Compute the number of s.f. required for
+                scientific notation of a given datafile parameter.
+
+                Returns the number of significant figures required for a given
+                parameter  in the datafile, that is represented as scientific
+                notation. The number of significant figures in the number
+                represented as mEn, i.e., m*10^n, is m, and we return m-1 --
+                that is, we do not include the digit to the left of the
+                decimal point.
+
+                Args:
+                    param (str): The parameter to lookup
+
+                Returns:
+                    number: The number of significant figures.
+                """
                 idx = self._get_index_of_parameter(param)
                 if idx[0] == 3:
-                    # This line requires scientific notation to 1dp
+                    # This line requires scientific notation to 1sf
                     return 1
                 elif idx[0] in [17, 18]:
-                    # These lines require scientific notation to 2dp
+                    # These lines require scientific notation to 2sf
                     return 2
                 else:
-                    if param.lower() in ['ct8', 'ct9', 'ct10']:
+                    param = param.lower()
+                    if param in ['ct8', 'ct9', 'ct10']:
                         return 1
-                    if param.lower() == 'zs':
+                    if param == 'zs':
                         return 2
-                    if param.lower() in ['vrot1', 'vrot2']:
+                    if param in ['vrot1', 'vrot2']:
                         return 2
-                    if param.lower() in ['facsgmin', 'sgthfac']:
+                    if param in ['facsgmin', 'sgthfac']:
                         return 2
-                    if param.lower() in ['hkh', 'gff']:
+                    if param in ['hkh', 'gff']:
                         return 2
 
                 return 0
 
             def _determine_decimal_places(self, param):
+                """Utility method: Determine the number of decimal places
+                for a given parameter NOT in scientific notation.
+
+                Determines the number of decimal places (to the RIGHT of the
+                decimal point) for a given parameter.
+
+                Args:
+                    param (str): The parameter to lookup
+
+                Returns:
+                    number: The number of decimal places.
+                """
                 idx = self._get_index_of_parameter(param)
                 param = param.lower()
                 if idx[0] == 16 and param != 'zs':
@@ -215,6 +413,23 @@ Current Value: {val} ({meaning['options'][val]})
                 return 0
 
             def _get_index_of_parameter(self, param):
+                """Utility function: Returns the location in the datafile of a
+                parameter.
+
+                Returns a 3-tuple of the location in the datafile corresponding
+                to a given parameter. The 3-tuple is of the form
+                (line_number, start_position, end_position).
+
+                Args:
+                    param (str): The parameter to lookup
+
+                Returns:
+                    tuple(int, int, int): The location of the parameter
+
+                Raises:
+                    KeyError: If an invalid parameter is passed.
+                """
+
                 """
                                                   .
 
@@ -245,6 +460,7 @@ Current Value: {val} ({meaning['options'][val]})
                     raise KeyError(f"Parameter {param} not recognised.")
 
             def _format_elucidate(self, datadict, fmt, splice_into=2):
+                """Utility function: See self.elucidate()."""
                 if fmt == 'plaintext':
                     res = ''
                     for key, val in datadict.items():
@@ -305,6 +521,35 @@ Current Value: {val} ({meaning['options'][val]})
             def elucidate(self, file, elucidate_only=None,
                                       fmt='plaintext',
                                       splice_into=2):
+
+                """Generate a report of all of the parameters in the data file
+                as key-value pairs.
+
+                Creates a file with key: value pairs of parameters. This file
+                is intended to be human-readable rather than machine-readable
+                (you should be using the raw datafile for machine-readable
+                methods anyways).
+
+                Args:
+                    file (str): The file to output the elucidation to.
+
+                Keyword Args:
+                    eludicate_only (list): A list of parameters to elucidate.
+                                           If None, then all parameters in the
+                                           datafile will be elucidated.
+                                           (default: None)
+
+                    fmt (str): The file format to elucidate (either `tex` or
+                               `plaintext`). `tex` creates a booktabs table
+                               to be pasted into a TeX document, whereas
+                               `plaintext` is just a list of key-value pairs.
+
+                    splice_into (int): An integer representing how many
+                                       column-pairs to splice the list into if
+                                       we are printing a tex'd table. For
+                                       instance, splice_int0=2 gives a table
+                                       like: Parameter | Value | Comment | Parameter | Value | Comment |
+                """
                 error = "`fmt` must be tex or plaintext"
                 assert fmt in ['plaintext', 'tex'], error
 
@@ -328,20 +573,69 @@ Current Value: {val} ({meaning['options'][val]})
 
                     f.writelines(elucidation)
 
-            def _write_to_pointer(self, pointer, data, mode):
+            def _write_to_pointer(self, pointer, data, mode: str = 'w'):
+                """Writes to a file handler object.
+
+                Writes to a file handler object (called a pointer here for
+                backwards compatibility reasons).
+
+                Args:
+                    pointer (file): the file object to write to (e.g., call
+                                    self._write_to_pointer(open('some_file',
+                                    'w'), ...) or similar).
+                    data (str): The data to write to the pointer.
+                    mode (str): Whether to "replace" or append ("w") the file.
+                """
+                options = ['w', 'replace']
+                error = "Invalid write mode selected. Valid options are: "
+                error += ", ".join(options)
+
+                assert mode in options, error
+
                 if mode == 'replace':
                     pointer.seek(0)
+
                 pointer.write("\n".join(data))
 
             def make_backup(self):
+                """Backs up the datafile.
+
+                Will always overwrite the contents of the backup datafile. The
+                backup datafile is assumed to be the file "[file].bak", where
+                [file] is the name of the datafile, in the same directory as
+                the datafile. For the average user, this is the file data.bak
+                in the run directory.
+
+                As a general rule, since this forcibly overwrites the data in
+                data.bak, you shouldn't use this method; you should use
+                self.backup_if_not_exists() instead (which *doesn't* overwrite)
+                """
                 with open(self._datafile + ".bak", 'w') as file:
                     self._write_to_pointer(file, self._original_contents, 'w')
 
             def backup_if_not_exists(self):
+                """Creates a backup of the datafile if one doesn't already
+                exist.
+
+                Companion method to self.make_backup(). This one checks first
+                to see if the targeted backup file exists or not, and only
+                creates a backup if one doesn't already exist.
+                """
                 if not path.exists(self._datafile + ".bak"):
                     self.make_backup()
 
             def _setitem(self, param, value):
+                """Sets the parameter param to value value in the datafile.
+
+                Writes a given parameter to the datafile. This method makes
+                changes to disk; it commits the parameter and doesn't just
+                remember it. Thus, a parameter set by this method is available
+                to the STARS code itself.
+
+                Args:
+                    param (str): The parameter to set the value of
+                    value (mixed): The value to set the parameter to.
+                """
                 idx = self._get_index_of_parameter(param)
 
                 value = str(value)
@@ -356,16 +650,21 @@ Current Value: {val} ({meaning['options'][val]})
                 scientific_notation_dp = self._check_scientific_notation(param)
                 num_dp = self._determine_decimal_places(param)
 
+                # Format the value into what the STARS code expects.
                 if scientific_notation_dp > 0:
                     value = f'%.{scientific_notation_dp}E' % Decimal(value)
                 if num_dp > 0:
                     value = f'%.{num_dp}f' % Decimal(value)
 
+                # Determine where in the datafile to stop writing to
                 if idx[2] is None:
+                    # The end of the line?
                     endpoint = len(self._contents[idx[0]])
                 else:
+                    # Or where we are told the endpoint is?
                     endpoint = idx[2]
 
+                # Partition this line into
                 length = endpoint-idx[1]
                 value = value.rjust(length)
 

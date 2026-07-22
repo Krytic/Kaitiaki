@@ -1,3 +1,4 @@
+import os
 import pprint
 import re
 import tempfile
@@ -250,9 +251,15 @@ class outfile:
         profiles: 3-d structured array
             Model profiles produced at regular intervals during the run.
             The first index of the array is the profile number.
+
+        License
+        -------
+        The following function is adapted from tomso, written by Warrick
+        Ball. It is used under the MIT License.
         """
         get_data = True
-        if filename.split('/')[-1].startswith('out2'):
+
+        if filename.split('/')[-1].startswith('out2') and os.path.exists(filename.replace('out2', 'out')):
             with open(filename.replace('out2', 'out'), 'r') as f:
                 line = f.readline()
 
@@ -343,8 +350,13 @@ class outfile:
         self.n_profiles = len(profiles) / NWRT3
 
         profiles = partition(profiles, NWRT3)
+        profiles = np.vstack((profiles,))
 
-        return np.vstack((profiles,))
+        NWRT1 = self.data_block.get('NWRT1')
+
+        self._model_nums = np.arange(0, (len(profiles)-1) * NWRT1, NWRT1)
+
+        return profiles
 
     def __init__(self, file='out', reindex_modelnums=False):
         try:
@@ -367,6 +379,11 @@ class outfile:
         self.__size = len(self._models)
 
         self.__detailed_idx = 0
+
+        self.__filename = file
+
+    def basepath(self):
+        return self.__filename
 
     def __del__(self):
         self.__fp.close()

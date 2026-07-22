@@ -52,6 +52,7 @@ import kaitiaki.constants as constants
 import kaitiaki.classifier as classify
 import kaitiaki.kicks as kicks
 import kaitiaki.sntools as sntools
+import kaitiaki.binary as binary
 
 # Augments -- will probably be made its own project
 import kaitiaki.augments as augments
@@ -101,6 +102,26 @@ def load_file(filename):
     return file
 
 
+def list_internal_files():
+    pathname = importlib_resources.files('kaitiaki') / '..' / 'backup_data'
+    pathname = os.path.normpath(pathname)
+
+    files = []
+
+    for file in os.listdir(pathname):
+        if os.path.isdir(os.path.join(pathname, file)):
+            for subfile in os.listdir(os.path.join(pathname, file)):
+                if subfile.startswith('__'):
+                    continue
+                files.append(os.path.join(file, subfile))
+        else:
+            if file.startswith('__'):
+                continue
+            files.append(file)
+
+    return files
+
+
 def format_metallicity(Z):
     if isinstance(Z, float):
         if Z in [1e-4, 1e-5]:
@@ -122,7 +143,7 @@ def format_metallicity(Z):
 log = glisten.log.Logger('~/.kaitiaki-log', line_length_break=72*3)
 
 
-def debug(msgtype, message, fatal=False):
+def debug(msgtype, message):
     """General purpose debug message handler
 
     Allows us to print to stdout when debugging (developing) and fail

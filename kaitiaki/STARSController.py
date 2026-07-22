@@ -35,7 +35,7 @@ class ServerError(Exception):
         self.server_code = server_code
         self.message = message
 
-        super().__init__(f'{self.server_code} {self.message}')
+        super().__init__(f'HTTP error code {self.server_code}: {self.message}')
 
 
 def install(install_path):
@@ -52,8 +52,7 @@ def install(install_path):
     """
     repo = 'UoA-Stars-And-Supernovae/STARS:master'
 
-    repo_name = repo.split('/')[1].split(":")[0]
-    branch = repo.split('/')[1].split(":")[1]
+    repo_name, branch = repo.split('/')[1].split(":")
 
     url = f'https://github.com/{repo}/archive/refs/heads/{branch}.zip'
 
@@ -98,7 +97,9 @@ def recompile(install_path):
         install_path (str): The location that the STARS code is installed to
 
     Returns:
-        tuple: a 2-tuple of 3-tuples representing ((stdout, stderr, termination_reason), (stdout, stderr, termination_reason)) for (make clean, make) respectively.
+        tuple: a 2-tuple of 3-tuples representing ((stdout, stderr,
+               termination_reason), (stdout, stderr, termination_reason))
+               for (make clean, make) respectively.
 
     Raises:
         ChildProcessError: If either command fails.
@@ -187,7 +188,8 @@ class STARSController:
             None
 
         Notes:
-            - Also sets the parameters ZS and CH in the data file. CH is set to 0.75-2.5*ZS.
+            - Also sets the parameters ZS and CH in the data file. CH is set
+              to 0.75-2.5*ZS.
             - Creates a new file *data* in the directory specified.
             - Creates a new file *COtables* in the directory specified
 
@@ -210,20 +212,35 @@ class STARSController:
 
         self.configure_parameters({'ZS': Z, 'CH': 0.75-2.5*Z})
 
-    def set_period(self, period,
-                         directory='.',
-                         boost_max_nmodels=True,
-                         forcibly_do_both=False):
+    def set_period(self,
+                   period,
+                   directory='.',
+                   boost_max_nmodels=True,
+                   forcibly_do_both=False):
         """Sets the period in the modin file.
 
+        Modifies modin (and perhaps modin2) to have a given period. Unless
+        forcibly_do_both is set to true, this routine will only modify modin2
+        if you're in binary mode; that is, if IMODE=2 in the datafile.
+
+        Args:
+            period (float): the period to set, in days
+            directory (str): the location of modin/modin2 (default: '.')
+            boost_max_nmodels (bool): whether to, whilst we're here, set the
+                                      maximum number of models to 99999.
+            forcibly_do_both (bool): whether to override checking data and
+                                     change modin2 anyway.
         """
         modin_location = directory + "/modin"
         modins = [modin_location]
 
-        in_secondary_mode = ('imode' in self._params.keys() and self._params['imode'] == 2)
+        in_secondary_mode = ('imode' in self._params.keys()
+                             and
+                             self._params['imode'] == 2)
 
         if in_secondary_mode or forcibly_do_both:
-            # We are in binary evolution mode
+            # We are in binary evolution mode (or the user says to
+            # override anyway)
             modins.append(f"{modin_location}2")
 
         for modin in modins:
@@ -245,12 +262,27 @@ class STARSController:
                 f.truncate()
 
     def update_datafile(self, new_location):
+        """Updates the location of data
+
+        Args:
+            new_location: the new location of the data file.
+        """
         self._datafile = new_location
 
     def update_run_bs(self, loc):
+        """Updates the location of run_bs
+
+        Args:
+            new_location: the new location of the run_bs file.
+        """
         self._run_bs_location = loc
 
     def fetch_datafile(self):
+        """Fetches the shipped backup data file.
+
+        Returns:
+            str: the contents of the data file
+        """
         return kaitiaki.load_file(f"data.bak")
 
     def load_default_modin(self,
@@ -258,6 +290,20 @@ class STARSController:
                            as_secondary=False,
                            Z='z020',
                            set_nmodels_to=99999):
+        """Loads the default modin file for a given metallicity.
+
+        Creates a new file called modin in the specified directory, containing
+        the contents of a given model input file.
+
+        Args:
+            directory (str): The directory to write the model file to
+                             (default: `'.'`)
+            as_secondary (bool): If True, writes it as modin2 instead of modin
+                                 (default: `False`)
+            Z (str): The metallicity to load in. (default: `'z020'`)
+            set_nmodels_to (int): What to set the maximum number of models to
+                                  in the modin file (default: `99999`)
+        """
 
         dest_file = 'modin'
 
@@ -268,30 +314,33 @@ class STARSController:
             modin = kaitiaki.load_file(f'modins/modin.bak.{Z}')
             modin = modin.split("\n")
 
-            if set_nmodels_to != None:
+            if set_nmodels_to is not None:
                 nmods = str(set_nmodels_to).rjust(5, '0')
                 modin[0] = modin[0][:94] + f" {nmods}" + modin[0][100:]
 
             file.write("\n".join(modin))
 
-    # TODO: Fix (dir isn't changed correctly and this will also
-    # probably not actually put the file anywhere
-    def generate_datafile(self, loc):
-        dfile = self.fetch_datafile()
-        wd = os.getcwd()
+    def generate_datafile(self, directory: str = '.'):
+        """Writes the datafile to a location.
 
-        for d in loc.split("/"):
-            os.chdir(d)
+        Writes the contents of the default datafile to the specified
+        directory.
 
-        with open(loc, 'w') as f:
-            f.write(dfile)
+        Args:
+            directory (str): The directory to write it to (default: `'.'`)
+        """
+        data = self.fetch_datafile()
+
+        with open(f'{directory}/data', 'w') as f:
+            f.write(data)
 
     def output(self, msgtype, message):
         """Outputs a message to stdout, if verbose_output is on. Does
         nothing otherwise.
 
         Args:
-            msgtype (str): The message type (warning, error, info, status) to output
+            msgtype (str): The message type (warning, error, info, status) to
+                           output
             message (str): The message to output
         """
         if self._verbose_output:
@@ -324,19 +373,23 @@ class STARSController:
             f.truncate()
 
     def setup_binary_evolution(self, dfile='data'):
-        """
-        Modifies data to allow for binary evolution. Sets the following
-        parameters:
-            ID block for binaries
-            IMODE   - To 2 (binaries)
-            IML1    - To 5 (custom) TODO: Check what prescription is
-            IML2    - To 5 (custom)
-            RML     - 0 (off)
-            ITH     - 1 (on)
-            IX      - 1 (on)
-            IY      - 1 (on)
-            IZ      - 1 (on)
-            ISTART  - 1 (reset age, nmod, dt)
+        """Modifies data to allow for binary evolution.
+
+        Args:
+            dfile (str): The location of the datafile.
+
+        Notes:
+            Sets the following parameters:
+                ID block for binaries
+                IMODE   - To 2 (binaries)
+                IML1    - To 5 (custom)
+                IML2    - To 5 (custom)
+                RML     - 0 (off)
+                ITH     - 1 (on)
+                IX      - 1 (on)
+                IY      - 1 (on)
+                IZ      - 1 (on)
+                ISTART  - 1 (reset age, nmod, dt)
         """
         binary_block = """ 14 14  0  9  1102  0  0  0 99
   1  2  4 16 17 19 13 14 29  5  3  9 10 11 12 15 20 18 24 25 26 27 30  8  7  6 23 22 21  0
@@ -351,22 +404,24 @@ class STARSController:
 
         self.configure_parameters(params)
 
-    # TODO: I have to make this fix the period if you set a single star
-    # after a binary run
     def setup_single_evolution(self, dfile='data'):
-        """
-        Modifies data to allow for single star evolution. Sets the following
-        parameters:
-            ID block for single stars
-            IMODE   - To 1 (single stars)
-            IML1    - To 5 (custom) TODO: Check what prescription is
-            IML2    - To 0 (off - shouldn't matter though)
-            RML     - 0 (off)
-            ITH     - 1 (on)
-            IX      - 1 (on)
-            IY      - 1 (on)
-            IZ      - 1 (on)
-            ISTART  - 1 (reset age, nmod, dt)
+        """Modifies data to allow for binary evolution.
+
+        Args:
+            dfile (str): The location of the datafile.
+
+        Notes:
+            Sets the following parameters:
+                ID block for single stars
+                IMODE   - To 1 (single stars)
+                IML1    - To 5 (custom) TODO: Check what prescription is
+                IML2    - To 0 (off - shouldn't matter though)
+                RML     - 0 (off)
+                ITH     - 1 (on)
+                IX      - 1 (on)
+                IY      - 1 (on)
+                IZ      - 1 (on)
+                ISTART  - 1 (reset age, nmod, dt)
         """
         single_block = """  6  7  0  3  0 76  0  0  0 99
   1  2  4  5  3  9 10 11 12 15  8  7  6  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
@@ -380,6 +435,7 @@ class STARSController:
         }
 
         self.configure_parameters(params)
+        self.set_period(1e80)
 
     def setup_zams_inflation(self, mass):
         """
@@ -401,7 +457,8 @@ class STARSController:
             'IX': 0,
             'IY': 0,
             'IZ': 0,
-            'ITH': 0
+            'ITH': 0,
+            'ISTART': 1
         }
 
         self.setup_single_evolution(dfile=self._datafile)
@@ -722,7 +779,7 @@ dt: {dt}"""
         if with_live_HR:
             ###
             # Known bug:
-            # This will cause the code to segfault.
+            # This will cause the code to segfault upon run_bs terminating.
             ###
 
             # Main thread owns the HRD, background thread owns stars.
