@@ -96,7 +96,7 @@ def recompile(install_path):
     Args:
         install_path (str): The location that the STARS code is installed to
 
-    Returns:
+/    Returns:
         tuple: a 2-tuple of 3-tuples representing ((stdout, stderr,
                termination_reason), (stdout, stderr, termination_reason))
                for (make clean, make) respectively.

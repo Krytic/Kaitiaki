@@ -401,6 +401,7 @@ Current Value: {val} ({meaning['options'][val]})
                     return 3
                 if param in ['fmac', 'fam']:
                     return 2
+                # TODO: Fix
                 if param in ['trc1', 'trc2']:
                     return 1
                 if param == 'mwts':
@@ -430,7 +431,7 @@ Current Value: {val} ({meaning['options'][val]})
                     KeyError: If an invalid parameter is passed.
                 """
 
-                """
+                r"""
                                                   .
 
                                                    .
