@@ -65,6 +65,9 @@ from .utils import transforms
 # Other tools I wrote
 import glisten
 
+# Other tools other people wrote
+import kaitiaki.kipp as kipp  # by Hamish Jelleyman, co-written by Claude
+
 # Metadata
 from kaitiaki._metadata import __version__
 

@@ -68,6 +68,20 @@ class plot:
     def state(self, N):
         return self._data.iloc[N].to_numpy()
 
+    def __getitem__(self, item):
+        # Forwards compatibility with the new kippenhahn engine
+        if item == 'conv_env':
+            return self.get('M_conv-env')
+        elif item == 'conv':
+            # need an array of envelopes:
+            data = np.empty((len(self), 12))
+            for i in range(1, 13):
+                dat = self.get(f'M_conv{i}')
+                data[:, i-1] = dat
+            return data
+        else:
+            return self.get(item)
+
     def zams(self):
         return self._data.iloc[0:]
 
@@ -134,7 +148,11 @@ class plot:
                            annotate: bool = True,
                            cores_only: bool = False,
                            sample_every: int = 1,
+                           engine='new',
                            **kwargs):
+        if engine == 'new':
+            kaitiaki.kipp.cli.main(self)
+            return
 
         err_msg = "x_axis must be collapsetime, modelnum, or age."
 
