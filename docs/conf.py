@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.abspath('.'))
 # -- Project information -----------------------------------------------------
 
 project = 'kaitiaki'
-copyright = '2023, Sean Richards'
+copyright = '2026, Sean Richards'
 author = 'Sean Richards'
 
 
@@ -32,12 +32,11 @@ author = 'Sean Richards'
 # ones.
 extensions = [
     # 'sphinx_rtd_theme',
-    'autoapi.extension',
     'sphinx.ext.coverage',
     'sphinx.ext.napoleon'
 ]
 
-autoapi_dirs = ['../kaitiaki']
+# autoapi_dirs = ['../kaitiaki']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
