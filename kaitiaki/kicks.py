@@ -111,7 +111,10 @@ def __BrayCustom(alpha, beta, mej, mrem):
 
 def __HobbsSpeedy(size):
     sig = 265
-    pdf = lambda v: np.sqrt(2/np.pi) * v**2 / sig**3 * np.exp(-v**2/(2*sig**2))
+
+    def pdf(v):
+        return np.sqrt(2/np.pi) * v**2 / sig**3 * np.exp(-v**2/(2*sig**2))
+
     xbounds = (0, 2000)
     pmax = pdf(np.linspace(*xbounds, 1000)).max()
 
@@ -159,7 +162,10 @@ def sample(dist_name, n_samples, **kwargs):
                      for cls_name, cls_obj in members
                      if inspect.isfunction(cls_obj) and cls_name[:2] == "__"]
 
-            dist = getattr(sys.modules[__name__], f'__{dist_name}')
+            try:
+                dist = getattr(sys.modules[__name__], f'__{dist_name}')
+            except AttributeError:
+                raise ValueError(f"Distribution {dist_name} is not defined.")
 
             return dist(size=n_samples)
     else:
@@ -174,7 +180,10 @@ def sample(dist_name, n_samples, **kwargs):
                      for cls_name, cls_obj in members
                      if inspect.isfunction(cls_obj) and cls_name[:2] == "__"]
 
-            dist = getattr(sys.modules[__name__], f'__{dist_name}')
+            try:
+                dist = getattr(sys.modules[__name__], f'__{dist_name}')
+            except AttributeError:
+                raise ValueError(f"Distribution {dist_name} is not defined.")
 
             return np.array([dist(**kwargs) for _ in range(n_samples)])
         else:
